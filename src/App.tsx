@@ -2,9 +2,9 @@ import { useState } from "react";
 import { Capacitor } from "@capacitor/core";
 import { EdgeToEdge } from "@capawesome/capacitor-android-edge-to-edge-support";
 import tw from "tailwind-styled-components";
-import styled from "styled-components";
 
-import logo from "./assets/Nouture.png";
+import { Services } from "./components/Services";
+import { Footer, LogoWrapper, Wrapper } from "./fragments/Elements";
 
 export const App = () => {
   const [clickCount, setClickCount] = useState(0);
@@ -15,7 +15,7 @@ export const App = () => {
   if (platform === "android") {
     const color =
       getComputedStyle(document.documentElement).getPropertyValue(
-        "--color-space-indigo",
+        "--color-space-indigo"
       ) || "#000000";
     EdgeToEdge.setNavigationBarColor({
       color: color,
@@ -26,8 +26,7 @@ export const App = () => {
   }
 
   return (
-    <div className="min-h-screen bg-shadow-grey text-white">
-      {/* Header */}
+    <AppWrapper>
       <LogoWrapper className="safe-area-top shadow-lg">
         <div className="container mx-auto text-center">
           <Header>Nouture</Header>
@@ -35,9 +34,7 @@ export const App = () => {
         </div>
       </LogoWrapper>
 
-      {/* Main Content */}
       <main className="container mx-auto py-8">
-        {/* Interactive Card */}
         <Wrapper className="rounded-lg p-6 mb-6 shadow-lg">
           <h2 className="text-lg font-semibold mb-4">Recent opened notes</h2>
           <button
@@ -48,41 +45,23 @@ export const App = () => {
           </button>
         </Wrapper>
 
-        {/* Platform Info */}
-        <Wrapper className="rounded-lg shadow-lg">
-          <h2 className="text-lg font-semibold mb-2">Add services</h2>
-          <p className="text-amethyst-smoke">
-            Running on: {platform[0].toUpperCase() + platform.substring(1)}
-          </p>
-        </Wrapper>
+        <Services />
       </main>
 
-      {/* Footer */}
       <Footer>
         <p className="text-center text-amethyst-smoke text-sm">
           Made by the ultimate meowmeow team
         </p>
       </Footer>
-    </div>
+    </AppWrapper>
   );
 };
 
-const Wrapper = tw.div`
-  bg-space-indigo
-  p-4
-`;
-
-const LogoWrapper = styled(Wrapper)`
-  background-image: url("${logo}");
-  background-size: contain;
-  background-position: left;
-  background-repeat: no-repeat;
-`;
-
-const Footer = tw(Wrapper)`
-  p-4
-  sticky
-  top-full
+const AppWrapper = tw.div`
+  min-h-screen
+  bg-shadow-grey
+  text-white
+  relative
 `;
 
 const Header = tw.h2`
