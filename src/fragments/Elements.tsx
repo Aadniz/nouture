@@ -26,3 +26,11 @@ export const SubHeader = tw.h3`
   text-xl
   mb-1
 `;
+
+export const Input = tw.input`
+  bg-jet-black
+  text-desert-sand
+  outline-0
+  rounded-lg
+  p-2
+`;

@@ -4,7 +4,8 @@ import { EdgeToEdge } from "@capawesome/capacitor-android-edge-to-edge-support";
 import tw from "tailwind-styled-components";
 
 import { Services } from "./components/Services";
-import { Footer, LogoWrapper, Wrapper } from "./fragments/Elements";
+import { Footer, LogoWrapper, SubHeader, Wrapper } from "./fragments/Elements";
+import { Button } from "./fragments/Button";
 
 export const App = () => {
   const [clickCount, setClickCount] = useState(0);
@@ -35,14 +36,14 @@ export const App = () => {
       </LogoWrapper>
 
       <main className="container mx-auto py-8">
-        <Wrapper className="rounded-lg p-6 mb-6 shadow-lg">
-          <h2 className="text-lg font-semibold mb-4">Recent opened notes</h2>
-          <button
+        <Wrapper className="rounded-lg mb-6 shadow-lg">
+          <SubHeader>Recent opened notes</SubHeader>
+          <Button
             onClick={() => setClickCount((prev) => prev + 1)}
-            className="w-full bg-lavender-grey hover:bg-periwinkle text-white font-bold py-3 px-6 rounded-lg transition duration-200 active:scale-95 transform"
+            className="bg-amethyst-smoke hover:bg-amethyst-smoke/90 active:bg-lavender-grey/80 w-full"
           >
             Some reactive button ({clickCount})
-          </button>
+          </Button>
         </Wrapper>
 
         <Services />

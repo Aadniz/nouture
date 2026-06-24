@@ -7,7 +7,7 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 
 export const Button = ({ children, className, ...rest }: ButtonProps) => {
   const baseClasses =
-    "font-bold rounded-lg p-2 transition-colors cursor-pointer";
+    "font-bold rounded-lg py-2 px-4 transition-colors cursor-pointer";
 
   return (
     <button className={`${baseClasses} ${className || ""}`} {...rest}>

@@ -13,3 +13,8 @@
     --color-jet-black: #292B39;
     --color-shadow-grey: #1F1F28;
 }
+
+::selection {
+  color: var(--color-shadow-grey);
+  background: var(--color-navajo-white);
+}
