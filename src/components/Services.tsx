@@ -5,6 +5,7 @@ import tw from "tailwind-styled-components";
 import { Button } from "../fragments/Button";
 import { useState } from "react";
 import { Modal } from "../fragments/Modal";
+import { Icon } from "../icons/icon";
 
 interface Service {
   id: string;
@@ -47,7 +48,15 @@ export const Services = () => {
             const name = s.name ?? `${s.host}:${s.port}`;
 
             return (
-              <Box onClick={() => setServiceModal(s)}>
+              <Box className="relative">
+                <Button
+                  className="absolute top-0 right-0 text-white/80 hover:text-white/70 active:text-lavender-grey"
+                  onClick={() => {
+                    setServiceModal(s);
+                  }}
+                >
+                  <Icon title="gear_wide_connected" />
+                </Button>
                 <h2>{name}</h2>
                 {description && (
                   <div className="text-white/50 text-sm">({description})</div>
