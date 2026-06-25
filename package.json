@@ -24,6 +24,8 @@
     "@capawesome/capacitor-android-edge-to-edge-support": "^8.0.8",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^5.2.0",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7",
     "react-router-dom": "^7.18.0",
     "zustand": "^5.0.14"
   },
