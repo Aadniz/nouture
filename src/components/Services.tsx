@@ -6,14 +6,7 @@ import { Button } from "../fragments/Button";
 import { useState } from "react";
 import { Modal } from "../fragments/Modal";
 import { Icon } from "../icons/icon";
-
-interface Service {
-  id: string;
-  host: string;
-  port: number;
-  name?: string;
-  lastSynced?: Date;
-}
+import { AddService, Service, useServiceStore } from "../stores/serviceStore";
 
 export const Services = () => {
   const platform = Capacitor.getPlatform();
@@ -22,33 +15,19 @@ export const Services = () => {
   // New service: true
   // Hidden: false
   const [serviceModal, setServiceModal] = useState<Service | boolean>(false);
-
-  const exampleServices: Array<Service> = [
-    {
-      id: "qwenoqwdnuioqwion",
-      host: "example.ddns.net",
-      port: 6665,
-      name: "Backup Server",
-      lastSynced: new Date("2026-06-23"),
-    },
-    {
-      id: "asdnqaengwiwe3",
-      host: "aadniz.ddns.net",
-      port: 6665,
-    },
-  ];
+  const { services, addService } = useServiceStore();
 
   return (
     <>
       <Wrapper className="rounded-lg shadow-lg">
         <SubHeader>Services</SubHeader>
         <div className="grid">
-          {exampleServices.map((s) => {
+          {services.map((s) => {
             const description = s.name ? `${s.host}:${s.port}` : undefined;
             const name = s.name ?? `${s.host}:${s.port}`;
 
             return (
-              <Box className="relative">
+              <Box className="relative" key={s.id}>
                 <Button
                   className="absolute top-0 right-0 text-white/80 hover:text-white/70 active:text-lavender-grey"
                   onClick={() => {
@@ -80,34 +59,34 @@ export const Services = () => {
       <ConfigureServiceModal
         serviceModal={serviceModal}
         setServiceModal={setServiceModal}
+        addService={addService}
       />
     </>
   );
 };
 
+const DEFAULT_SERVICE: AddService = {
+  host: "",
+  port: 22,
+};
+
 const ConfigureServiceModal = ({
   serviceModal,
   setServiceModal,
+  addService,
 }: {
   serviceModal: Service | boolean;
   setServiceModal: (_: boolean) => void;
+  addService: (service: AddService) => void;
 }) => {
   const newService = typeof serviceModal === "boolean";
   const title = newService
     ? "Add new service"
     : `Configure ${serviceModal.name ?? serviceModal.host}`;
 
-  let id = "";
-  let host = "";
-  let name = "";
-  let port = "";
-  if (typeof serviceModal !== "boolean") {
-    // Means we are editing a service
-    id = serviceModal.id;
-    host = serviceModal.host;
-    name = serviceModal.name ?? "";
-    port = serviceModal.port.toString();
-  }
+  const [service, setService] = useState<AddService>(
+    typeof serviceModal !== "boolean" ? serviceModal : DEFAULT_SERVICE
+  );
 
   return (
     <Modal
@@ -115,20 +94,46 @@ const ConfigureServiceModal = ({
       description="Just configure your service by defining the hostname and port number. Only SSH/SFTP are supported for now."
       show={!!serviceModal}
       onClose={() => setServiceModal(false)}
+      onSave={() => {
+        addService(service);
+        setServiceModal(false);
+        setService(DEFAULT_SERVICE);
+      }}
     >
       <Column>
         <Row>
           <Column>
             <Label>Host</Label>
-            <Input value={host} placeholder="example.com" />
+            <Input
+              value={service.host}
+              placeholder="example.com"
+              onChange={(
+                e: React.ChangeEvent<HTMLInputElement, HTMLInputElement>
+              ) => setService({ ...service, ...{ host: e.target.value } })}
+            />
           </Column>
           <Column>
             <Label>Port</Label>
-            <Input style={{ width: "80px" }} value={port} placeholder="22" />
+            <Input
+              style={{ width: "80px" }}
+              value={service.port}
+              type="number"
+              min="1"
+              max="65535"
+              placeholder="22"
+              onChange={(
+                e: React.ChangeEvent<HTMLInputElement, HTMLInputElement>
+              ) =>
+                setService({
+                  ...service,
+                  ...{ port: parseInt(e.target.value) },
+                })
+              }
+            />
           </Column>
         </Row>
         <Label>Name</Label>
-        <Input value={name} placeholder="(optional)" />
+        <Input value={service.name} placeholder="(optional)" />
       </Column>
     </Modal>
   );

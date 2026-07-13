@@ -15,6 +15,7 @@ export const Modal = ({
   title,
   description,
   onClose,
+  onSave,
   show,
 }: ModalProps) => {
   return (
@@ -31,9 +32,14 @@ export const Modal = ({
           >
             Close
           </Button>
-          <Button className="bg-amethyst-smoke hover:bg-amethyst-smoke/90 active:bg-lavender-grey/80">
-            Save
-          </Button>
+          {onSave && (
+            <Button
+              className="bg-amethyst-smoke hover:bg-amethyst-smoke/90 active:bg-lavender-grey/80"
+              onClick={() => onSave()}
+            >
+              Save
+            </Button>
+          )}
         </div>
       </ModalWrapper>
     </BackDrop>
