@@ -74,8 +74,6 @@ const ModalWrapper = tw.div<{ $show: boolean }>`
   ${(p) => (p.$show ? "scale-100" : "scale-105 pointer-events-none opacity-0")}
   absolute
   max-w-[80vw]
-  // Often needs to fit an on-board keyboard
-  max-h-[50vh]
   bg-graphite
   border-dusty-grape
   border-2
