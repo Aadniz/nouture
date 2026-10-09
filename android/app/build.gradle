@@ -28,6 +28,12 @@ android {
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }
+    packagingOptions {
+        jniLibs {
+            // unison and noussh are executables; they must be extracted to run
+            useLegacyPackaging = true
+        }
+    }
 }
 
 repositories {
@@ -46,7 +52,9 @@ dependencies {
     androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
     androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
     implementation project(':capacitor-cordova-android-plugins')
-    implementation 'com.jcraft:jsch:0.1.55'
+    implementation 'com.github.mwiede:jsch:2.28.7'
+    implementation 'org.bouncycastle:bcprov-jdk15to18:1.86'
+    implementation 'androidx.work:work-runtime-ktx:2.11.2'
 }
 
 apply from: 'capacitor.build.gradle'

@@ -1,0 +1,7 @@
+Nouture bundles Unison, a file synchronizer released under the GNU General
+Public License, version 3:
+
+  android/app/src/main/jniLibs/arm64-v8a/libunison.so
+
+It is Unison 2.53.8, unmodified, built by scripts/build-unison-android.sh
+from the source at https://github.com/bcpierce00/unison/tree/v2.53.8

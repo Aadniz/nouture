@@ -34,3 +34,55 @@ export const Input = tw.input`
   rounded-lg
   p-2
 `;
+
+export const Select = tw.select`
+  bg-jet-black
+  text-desert-sand
+  outline-0
+  rounded-lg
+  p-2
+`;
+
+export const TextArea = tw.textarea`
+  bg-jet-black
+  text-desert-sand
+  outline-0
+  rounded-lg
+  p-2
+  font-mono
+  text-sm
+`;
+
+export const Row = tw.div`flex flex-row gap-2`;
+export const Column = tw.div`flex flex-col`;
+
+export const Label = tw.label`
+  text-amethyst-smoke
+  mt-2
+  text-sm
+`;
+
+export const Box = tw.div`
+  border-amethyst-smoke
+  bg-graphite
+  border
+  m-2
+  rounded-xl
+  p-4
+  text-center
+  content-center
+  relative
+`;
+
+/** Unison/command output, styled like an Input */
+export const Output = tw.pre`
+  bg-jet-black
+  text-desert-sand
+  rounded-lg
+  p-2
+  font-mono
+  text-xs
+  whitespace-pre-wrap
+  break-all
+  text-left
+`;

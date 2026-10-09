@@ -1,13 +1,17 @@
+import { useEffect, useRef } from "react";
 import tw from "tailwind-styled-components";
 import { Button } from "./Button";
 
 interface ModalProps {
-  children: React.ReactNode;
+  children?: React.ReactNode;
   title?: string;
   description?: string;
   onSave?: () => void;
+  saveLabel?: string;
   onClose: () => void;
   show?: boolean;
+  /** Extra buttons, placed before Close */
+  footer?: React.ReactNode;
 }
 
 export const Modal = ({
@@ -16,16 +20,25 @@ export const Modal = ({
   description,
   onClose,
   onSave,
+  saveLabel = "Save",
   show,
+  footer,
 }: ModalProps) => {
+  // Modals stay mounted (for the popup animation); start each opening at the top
+  const content = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (show && content.current) content.current.scrollTop = 0;
+  }, [show]);
+
   return (
     <BackDrop $show={show}>
       <ModalWrapper $show={show}>
         {title && <ModalTitle>{title}</ModalTitle>}
         {description && <ModalDesc>{description}</ModalDesc>}
         {(title || description) && <ModalLine />}
-        <ModalContent>{children}</ModalContent>
+        {children && <ModalContent ref={content}>{children}</ModalContent>}
         <div className="flex gap-1">
+          {footer}
           <Button
             className="bg-jet-black hover:bg-jet-black/90 active:bg-dusty-grape/20"
             onClick={() => onClose()}
@@ -37,7 +50,7 @@ export const Modal = ({
               className="bg-amethyst-smoke hover:bg-amethyst-smoke/90 active:bg-lavender-grey/80"
               onClick={() => onSave()}
             >
-              Save
+              {saveLabel}
             </Button>
           )}
         </div>
@@ -48,6 +61,8 @@ export const Modal = ({
 
 const ModalContent = tw.div`
   p-2
+  max-h-[65vh]
+  overflow-y-auto
 `;
 
 const ModalLine = tw.hr`

@@ -12,6 +12,13 @@
     --color-graphite: #363641;
     --color-jet-black: #292B39;
     --color-shadow-grey: #1F1F28;
+
+    /* More from the same artwork */
+    --color-apricot: #FCC097;         /* sunlit cloud undersides: warnings, activity */
+    --color-blanched-almond: #FFECCC; /* the window lights */
+    --color-dusty-rose: #D2A2AC;      /* pink sunset bands: errors */
+    --color-lilac: #D1B1E3;           /* violet clouds: success */
+    --color-persian-blue: #2042BF;    /* cobalt accents: sync */
 }
 
 ::selection {
