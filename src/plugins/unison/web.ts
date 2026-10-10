@@ -1,12 +1,14 @@
 import { WebPlugin } from "@capacitor/core";
 import type {
+  ConflictDetails,
   ConnectionTest,
   Profile,
   SshKey,
+  SyncResult,
   UnisonPlugin,
 } from "./definitions";
 
-/** unison only runs on the phone; in the browser everything is unavailable. */
+/** unison only runs on Android; in the browser everything is unavailable. */
 export class UnisonWeb extends WebPlugin implements UnisonPlugin {
   async requestLocalNetwork(): Promise<{ granted: boolean }> {
     return { granted: true };
@@ -73,6 +75,14 @@ export class UnisonWeb extends WebPlugin implements UnisonPlugin {
   }
 
   async readLog(): Promise<{ text: string }> {
+    throw this.unimplemented("Not available on web");
+  }
+
+  async conflictDetails(): Promise<ConflictDetails> {
+    throw this.unimplemented("Not available on web");
+  }
+
+  async resolveConflict(): Promise<{ resolved: boolean; result: SyncResult }> {
     throw this.unimplemented("Not available on web");
   }
 }

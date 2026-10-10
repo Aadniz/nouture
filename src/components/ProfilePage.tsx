@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useBlocker, useNavigate, useSearchParams } from "react-router-dom";
+import tw from "tailwind-styled-components";
 import { Button, PRIMARY, SECONDARY } from "../fragments/Button";
 import { Column, Input, Label, Row, SubHeader, TextArea, Wrapper } from "../fragments/Elements";
 import { Modal } from "../fragments/Modal";
@@ -20,6 +21,7 @@ import {
   valuesOf,
 } from "../unison/profile";
 import { ANDROID, OFFERED, PREFS, PrefSpec, SECTIONS, canonical } from "../unison/schema";
+import { resolveSshHost, sshHosts } from "../unison/sshConfig";
 import { FieldShell, Issues, PrefField } from "./PrefFields";
 
 const PROFILE_NAME = /^[A-Za-z0-9._-]+$/;
@@ -54,7 +56,7 @@ const ProfilePage = ({ existing }: { existing: string | null }) => {
   const [savedText, setSavedText] = useState(existing ? "" : NEW_PROFILE);
   const [asText, setAsText] = useState(false);
   const [advanced, setAdvanced] = useState(false);
-  const [hosts, setHosts] = useState<string[]>([]);
+  const [sshConfig, setSshConfig] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
@@ -69,8 +71,8 @@ const ProfilePage = ({ existing }: { existing: string | null }) => {
         .catch((e) => setError(String(e)));
     }
     Unison.readSshFile({ name: "config" })
-      .then((f) => setHosts(sshHosts(f.text)))
-      .catch(() => setHosts([]));
+      .then((f) => setSshConfig(f.text))
+      .catch(() => setSshConfig(""));
   }, [existing]);
 
   // Leaving with unsaved changes (back button too) asks first
@@ -167,7 +169,7 @@ const ProfilePage = ({ existing }: { existing: string | null }) => {
         <SubHeader>Profile</SubHeader>
         {!existing && (
           <>
-            <Label>Name</Label>
+            <FieldLabel>Name</FieldLabel>
             <Input value={name} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setName(e.target.value)} />
             {nameError && <div className="text-dusty-rose text-sm mt-1">{nameError}</div>}
           </>
@@ -207,11 +209,10 @@ const ProfilePage = ({ existing }: { existing: string | null }) => {
             <SubHeader>Roots</SubHeader>
             <RootsField
               roots={roots}
-              hosts={hosts}
+              sshConfig={sshConfig}
               issues={issues.filter((i) => i.pref === "root")}
               onChange={(values) => set("root", values)}
-              phoneExtra={field(PREFS.fat)}
-              serverExtra={field(PREFS.sshargs)}
+              androidExtra={field(PREFS.fat)}
             />
           </Section>
 
@@ -270,6 +271,9 @@ const ProfilePage = ({ existing }: { existing: string | null }) => {
   );
 };
 
+/** Labels stand out from the hints below them, like the option names */
+const FieldLabel = tw(Label)`text-blanched-almond`;
+
 /** A page section, like the ones on the home screen; fields stack in a column */
 const Section = ({ children }: { children: React.ReactNode }) => (
   <Wrapper className="rounded-lg mb-6 shadow-lg">
@@ -278,24 +282,23 @@ const Section = ({ children }: { children: React.ReactNode }) => (
 );
 
 /**
- * The two roots: a folder on the phone and the server, as separate fields.
+ * The two roots: a folder on Android and the server, as separate fields.
  * Profiles shaped differently fall back to plain root fields.
  */
 const RootsField = ({
   roots,
-  hosts,
+  sshConfig,
   issues,
   onChange,
-  phoneExtra,
-  serverExtra,
+  androidExtra,
 }: {
   roots: string[];
-  hosts: string[];
+  /** ~/.ssh/config, for host suggestions and what an empty field means */
+  sshConfig: string;
   issues: Issue[];
   onChange: (roots: string[]) => void;
-  /** Fields shown with the phone's root and with the server */
-  phoneExtra: React.ReactNode;
-  serverExtra: React.ReactNode;
+  /** Fields shown with the Android root */
+  androidExtra: React.ReactNode;
 }) => {
   const parsed = roots.map((r) => {
     try {
@@ -317,8 +320,7 @@ const RootsField = ({
             className="mt-1"
             value={roots[i] ?? ""}
             placeholder={i === 0 ? "/storage/emulated/0/Documents/org" : "ssh://host//path/to/org"}
-            spellCheck={false}
-            autoCapitalize="off"
+            inputMode="url"
             onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
               const next = [roots[0] ?? "", roots[1] ?? ""];
               next[i] = e.target.value;
@@ -326,14 +328,16 @@ const RootsField = ({
             }}
           />
         ))}
-        {phoneExtra}
-        {serverExtra}
+        {androidExtra}
       </FieldShell>
     );
   }
 
   // ssh://host is incomplete while typing, so parse what's there by hand
   const remote: Root = parsed[remoteIndex] ?? { protocol: "ssh", ...partialSsh(roots[remoteIndex]) };
+  // Empty user/port fields fall back to ~/.ssh/config: show those as placeholders
+  const hosts = sshHosts(sshConfig);
+  const resolved = remote.host ? resolveSshHost(sshConfig, remote.host) : {};
   // Only characters clroot.ml allows in each part, so "/", ":" or "@" can't
   // shift the boundaries between them (IPv6/sockets: edit as text)
   const only = (allowed: RegExp) => (e: React.ChangeEvent<HTMLInputElement>) =>
@@ -348,32 +352,31 @@ const RootsField = ({
     next[localIndex] = path;
     onChange(next);
   };
-  const input = (props: React.ComponentProps<typeof Input>) => (
-    <Input spellCheck={false} autoCapitalize="off" {...props} />
-  );
-
   return (
     <>
-      <Label>This phone</Label>
-      {input({
-        value: roots[localIndex],
-        placeholder: "/storage/emulated/0/Documents/org",
-        onChange: (e: React.ChangeEvent<HTMLInputElement>) => setLocal(e.target.value),
-      })}
+      <FieldLabel>Android</FieldLabel>
+      {/* The URL keyboard has "/" next to the space bar (and ".com" for hosts) */}
+      <Input
+        value={roots[localIndex]}
+        placeholder="/storage/emulated/0/Documents/org"
+        inputMode="url"
+        onChange={(e: React.ChangeEvent<HTMLInputElement>) => setLocal(e.target.value)}
+      />
       <div className="text-xs text-amethyst-smoke mt-1">
         A folder in shared storage, so other editors can open the notes too
       </div>
-      {phoneExtra}
+      {androidExtra}
 
       <Row>
         <Column className="flex-1">
-          <Label>Server</Label>
-          {input({
-            value: remote.host ?? "",
-            placeholder: hosts[0] ?? "example.com",
-            list: "nouture-ssh-hosts",
-            onChange: (e: React.ChangeEvent<HTMLInputElement>) => setRemote({ host: only(/[-_a-zA-Z0-9%.]/)(e) }),
-          })}
+          <FieldLabel>Server</FieldLabel>
+          <Input
+            value={remote.host ?? ""}
+            placeholder={hosts[0] ?? "example.com"}
+            list="nouture-ssh-hosts"
+            inputMode="url"
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setRemote({ host: only(/[-_a-zA-Z0-9%.]/)(e) })}
+          />
           <datalist id="nouture-ssh-hosts">
             {hosts.map((h) => (
               <option key={h} value={h} />
@@ -381,34 +384,34 @@ const RootsField = ({
           </datalist>
         </Column>
         <Column>
-          <Label>Port</Label>
-          {input({
-            style: { width: "60px" },
-            value: remote.port ?? "",
-            placeholder: "22",
-            inputMode: "numeric",
-            onChange: (e: React.ChangeEvent<HTMLInputElement>) => setRemote({ port: only(/[0-9]/)(e) }),
-          })}
+          <FieldLabel>Port</FieldLabel>
+          <Input
+            style={{ width: "60px" }}
+            value={remote.port ?? ""}
+            placeholder={resolved.port ?? "22"}
+            inputMode="numeric"
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setRemote({ port: only(/[0-9]/)(e) })}
+          />
         </Column>
       </Row>
-      <Label>User</Label>
-      {input({
-        value: remote.user ?? "",
-        placeholder: "from ~/.ssh/config",
-        onChange: (e: React.ChangeEvent<HTMLInputElement>) => setRemote({ user: only(/[-_a-zA-Z0-9.%]/)(e) }),
-      })}
-      <Label>Path on the server</Label>
-      {input({
-        value: remote.path ?? "",
-        placeholder: "/path/to/org",
-        onChange: (e: React.ChangeEvent<HTMLInputElement>) => setRemote({ path: e.target.value || undefined }),
-      })}
+      <FieldLabel>User</FieldLabel>
+      <Input
+        value={remote.user ?? ""}
+        placeholder={resolved.user}
+        onChange={(e: React.ChangeEvent<HTMLInputElement>) => setRemote({ user: only(/[-_a-zA-Z0-9.%]/)(e) })}
+      />
+      <FieldLabel>Path on the server</FieldLabel>
+      <Input
+        value={remote.path ?? ""}
+        placeholder="/path/to/org"
+        inputMode="url"
+        onChange={(e: React.ChangeEvent<HTMLInputElement>) => setRemote({ path: e.target.value || undefined })}
+      />
       <div className="text-xs text-amethyst-smoke mt-1">
         Start with / for an absolute path, otherwise it's relative to the home directory
       </div>
       <div className="text-xs text-desert-sand font-mono break-all mt-1">root = {roots[remoteIndex]}</div>
       <Issues issues={issues} />
-      {serverExtra}
     </>
   );
 };
@@ -418,13 +421,6 @@ const partialSsh = (root: string): Partial<Root> => {
   const m = /^ssh:\/\/(?:([^@/]+)@)?([^:/]*)(?::([^/]*))?(?:\/(.*))?$/.exec(root);
   return m ? { user: m[1], host: m[2] || undefined, port: m[3], path: m[4] } : {};
 };
-
-/** Host aliases from ~/.ssh/config, without wildcard patterns */
-const sshHosts = (config: string) =>
-  config
-    .split("\n")
-    .flatMap((line) => /^\s*Host\s+(.+)$/i.exec(line)?.[1].split(/\s+/) ?? [])
-    .filter((h) => h && !/[*?!]/.test(h));
 
 /**
  * Setting a single-valued preference back to unison's default removes its

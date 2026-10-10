@@ -14,7 +14,7 @@ interface UnisonState {
   deleteProfile: (name: string) => Promise<void>;
   setAutoSync: (name: string, enabled: boolean) => Promise<void>;
   sync: (name: string, reason?: string) => Promise<void>;
-  /** The phone's version of the Emacs hooks: sync the profile owning `path`. */
+  /** Android's version of the Emacs hooks: sync the profile owning `path`. */
   syncFile: (path: string, reason: "open" | "save") => void;
 }
 

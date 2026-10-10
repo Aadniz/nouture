@@ -1,11 +1,11 @@
 import { useEffect, useState } from "react";
-import { Button } from "../fragments/Button";
+import { Button, Chip } from "../fragments/Button";
 import {
-  Box,
   Column,
   Input,
   Label,
   Output,
+  Row,
   SubHeader,
   TextArea,
   Wrapper,
@@ -46,59 +46,30 @@ export const SshSettings = () => {
         <SubHeader>SSH</SubHeader>
 
         {keys.map((key) => (
-          <Box key={key.name}>
-            <div className="absolute top-0 right-0 flex gap-1">
-              <IconButton onClick={() => copy(key)} title="Copy public key">
-                <Icon title={copied === key.name ? "check2" : "clipboard"} />
-              </IconButton>
-              <IconButton
-                onClick={() => Unison.deleteKey({ name: key.name }).then(refresh)}
-                title="Delete key"
-              >
-                <Icon title="trash3" />
-              </IconButton>
-            </div>
-            <div className="flex items-center justify-center gap-2">
+          <Row key={key.name} className="items-center" title={key.fingerprint}>
+            <span className="text-amethyst-smoke px-2">
               <Icon title="key" />
-              <h2>~/.ssh/{key.name}</h2>
-            </div>
-            <div className="text-amethyst-smoke text-xs font-mono break-all mt-1">
-              {key.fingerprint}
-            </div>
-          </Box>
+            </span>
+            <span className="flex-1 truncate font-mono text-sm text-desert-sand">~/.ssh/{key.name}</span>
+            <IconButton onClick={() => copy(key)} title="Copy public key">
+              <Icon title={copied === key.name ? "check2" : "clipboard"} />
+            </IconButton>
+            <IconButton onClick={() => Unison.deleteKey({ name: key.name }).then(refresh)} title="Delete key">
+              <Icon title="trash3" />
+            </IconButton>
+          </Row>
         ))}
         {keys.length === 0 && (
-          <div className="text-center text-amethyst-smoke p-4 text-sm">
-            Generate a key for this phone and add its public key to the
-            server's ~/.ssh/authorized_keys.
+          <div className="text-amethyst-smoke text-sm px-2 mb-1">
+            No key yet: make one and add it to the server's authorized_keys.
           </div>
         )}
 
-        <div className="grid grid-cols-2 gap-1 m-2">
-          <Button
-            className="bg-amethyst-smoke hover:bg-amethyst-smoke/90 active:bg-lavender-grey/80"
-            onClick={() => setKeyModal("generate")}
-          >
-            Generate key
-          </Button>
-          <Button
-            className="bg-jet-black hover:bg-jet-black/90 active:bg-dusty-grape/20"
-            onClick={() => setKeyModal("import")}
-          >
-            Import key
-          </Button>
-          <Button
-            className="bg-jet-black hover:bg-jet-black/90 active:bg-dusty-grape/20"
-            onClick={() => setFile("config")}
-          >
-            ~/.ssh/config
-          </Button>
-          <Button
-            className="bg-jet-black hover:bg-jet-black/90 active:bg-dusty-grape/20"
-            onClick={() => setFile("known_hosts")}
-          >
-            known_hosts
-          </Button>
+        <div className="flex flex-wrap gap-1 mt-1">
+          <Chip onClick={() => setKeyModal("generate")}>New key</Chip>
+          <Chip onClick={() => setKeyModal("import")}>Import</Chip>
+          <Chip onClick={() => setFile("config")}>config</Chip>
+          <Chip onClick={() => setFile("known_hosts")}>known_hosts</Chip>
         </div>
       </Wrapper>
 

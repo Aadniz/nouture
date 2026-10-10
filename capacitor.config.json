@@ -3,7 +3,8 @@
   "appName": "Nouture",
   "webDir": "dist",
   "server": {
-    "androidScheme": "https"
+    "androidScheme": "https",
+    "errorPath": "live-reload-error.html"
   },
   "plugins": {
     "SplashScreen": {

@@ -12,6 +12,9 @@ export interface SyncResult {
   skipped: number;
   failed: number;
   conflicts: string[];
+  /** Why unison skipped each conflict, e.g. "contents changed on both sides" */
+  conflictReasons?: Record<string, string>;
+  failedPaths?: string[];
   changed: string[];
   error?: string;
   untrustedHost: boolean;
@@ -48,6 +51,30 @@ export interface ConnectionTest {
 
 export type SshFile = "config" | "known_hosts";
 
+/** One replica's version of a conflicting file */
+export interface ConflictSide {
+  exists: boolean;
+  size: number;
+  /** Only known for the server: Android's storage doesn't keep mtimes reliably */
+  mtime: number | null;
+  /** null when missing, binary or too large to show */
+  text: string | null;
+  binary: boolean;
+}
+
+export interface ConflictDetails {
+  path: string;
+  reason?: string;
+  serverHost?: string;
+  android: ConflictSide;
+  server: ConflictSide;
+  /** The last version both sides agreed on, if Nouture recorded one */
+  base: ConflictSide | null;
+}
+
+/** How to resolve: keep one side, keep both (Android's as a copy), or a merge */
+export type ConflictChoice = "android" | "server" | "both" | "merged";
+
 export interface UnisonPlugin {
   /** Android 17+ needs this to reach a server on the home network. */
   requestLocalNetwork(): Promise<{ granted: boolean }>;
@@ -67,6 +94,15 @@ export interface UnisonPlugin {
   importKey(options: { name: string; privateKey: string }): Promise<SshKey>;
   deleteKey(options: { name: string }): Promise<void>;
   readLog(options?: { lines?: number }): Promise<{ text: string }>;
+  conflictDetails(options: { name: string; path: string }): Promise<ConflictDetails>;
+  /** Syncs just this path in the chosen direction, then everything. */
+  resolveConflict(options: {
+    name: string;
+    path: string;
+    keep: ConflictChoice;
+    /** The merged text, for keep = "merged" */
+    text?: string;
+  }): Promise<{ resolved: boolean; result: SyncResult }>;
 
   addListener(
     event: "syncStarted",

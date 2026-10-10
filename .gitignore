@@ -5,3 +5,10 @@ node_modules/
 .DS_Store
 .sourcemaps
 dist/
+
+# Release signing, once the GitHub release setup exists
+*.jks
+*.keystore
+keystore.properties
+
+*.log

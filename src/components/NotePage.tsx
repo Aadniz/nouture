@@ -11,6 +11,7 @@ import { Headline, parse } from "../org/parse";
 import { Notes } from "../plugins/notes";
 import { fileName, useNotesStore } from "../stores/notesStore";
 import { profileForPath, useUnisonStore } from "../stores/unisonStore";
+import { conflictPath } from "./ConflictPage";
 import { OrgView } from "./OrgView";
 import { notePath } from "./RecentNotes";
 
@@ -19,7 +20,8 @@ const ORG_FILE = /\.org(_archive)?$/;
 
 interface Buffer {
   text: string;
-  mtime: number;
+  /** Of the file's contents when read or saved, to notice changes on disk */
+  hash: string;
   /** Quick edits not written to disk yet */
   dirty: boolean;
 }
@@ -56,12 +58,18 @@ const NotePage = ({ path }: { path: string }) => {
   const openSynced = useRef(false);
 
   const isOrg = ORG_FILE.test(path);
+  // Unison skipped this note: changed both here and elsewhere
+  const relative = profile?.localRoot ? path.slice(profile.localRoot.length + 1) : null;
+  const syncConflict =
+    relative && profile?.lastResult?.conflicts.includes(relative)
+      ? profile.lastResult.conflictReasons?.[relative] ?? "changed on both sides"
+      : null;
   const doc = useMemo(() => (buffer && isOrg ? parse(buffer.text) : null), [buffer?.text, isOrg]);
 
   const load = useCallback(async () => {
     try {
       const file = await Notes.readFile({ path });
-      setBuffer({ text: file.text, mtime: file.mtime, dirty: false });
+      setBuffer({ text: file.text, hash: file.hash, dirty: false });
       setChangedOnDisk(false);
       setError(null);
     } catch (e) {
@@ -77,13 +85,13 @@ const NotePage = ({ path }: { path: string }) => {
         const result = await Notes.writeFile({
           path,
           text,
-          expectedMtime: force ? undefined : current.mtime,
+          expectedHash: force ? undefined : current.hash,
         });
         if (result.conflict) {
           setConflict(text);
           return false;
         }
-        setBuffer({ text, mtime: result.mtime, dirty: false });
+        setBuffer({ text, hash: result.hash, dirty: false });
         setChangedOnDisk(false);
         syncFile(path, "save"); // after-save-hook
         return true;
@@ -136,7 +144,7 @@ const NotePage = ({ path }: { path: string }) => {
     if (!finishedAt || !bufferRef.current) return;
     Notes.stat({ path }).then((stat) => {
       const current = bufferRef.current;
-      if (!current || stat.mtime === current.mtime) return;
+      if (!current || !stat.hash || stat.hash === current.hash) return;
       if (current.dirty || draftRef.current !== undefined) setChangedOnDisk(true);
       else load();
     });
@@ -198,6 +206,17 @@ const NotePage = ({ path }: { path: string }) => {
   return (
     <Page title={fileName(path)} actions={actions}>
       {error && <div className="text-dusty-rose text-sm px-4 wrap-break-word">{error}</div>}
+
+      {syncConflict && profile && (
+        <Box>
+          <p>This note has a sync conflict: {syncConflict}.</p>
+          <div className="flex justify-center mt-2">
+            <Button className={PRIMARY} onClick={() => navigate(conflictPath(profile.name, relative!))}>
+              Resolve
+            </Button>
+          </div>
+        </Box>
+      )}
 
       {changedOnDisk && (
         <Box>

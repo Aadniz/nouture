@@ -16,15 +16,15 @@ import {
 import { ALL_PREFS, ANDROID, OFFERED, PREFS, ROOT_PREFS, SECTIONS, isProfilePref } from "./schema";
 
 const DESKTOP = `root = /home/me/Documents/org
-root = ssh://backup//raid/backup/unison/org-notes
+root = ssh://backup//srv/unison/org
 batch = true
 
 # Set SSH port and key
-#sshargs = -p 6665
+#sshargs = -p 2222
 `;
 
-const PHONE = `root = /storage/emulated/0/Documents/org
-root = ssh://backup//raid/backup/unison/org-notes
+const ANDROID_PROFILE = `root = /storage/emulated/0/Documents/org
+root = ssh://backup//srv/unison/org
 batch = true
 fat = true
 `;
@@ -117,10 +117,10 @@ describe("setValues", () => {
 
 describe("roots", () => {
   it("parses like clroot.ml", () => {
-    expect(parseRoot("ssh://backup//raid/backup")).toEqual({
-      protocol: "ssh", host: "backup", path: "/raid/backup", user: undefined, port: undefined,
+    expect(parseRoot("ssh://backup//srv/unison")).toEqual({
+      protocol: "ssh", host: "backup", path: "/srv/unison", user: undefined, port: undefined,
     });
-    expect(parseRoot("ssh://bk@knaben.ddns.net:6665/org")).toMatchObject({ user: "bk", port: "6665", path: "org" });
+    expect(parseRoot("ssh://me@example.com:2222/org")).toMatchObject({ user: "me", port: "2222", path: "org" });
     expect(parseRoot("/storage/emulated/0/org")).toEqual({ protocol: "file", path: "/storage/emulated/0/org" });
     expect(() => parseRoot("rsh://host/x")).toThrow(/deprecated/);
     expect(() => parseRoot("ssh:/host")).toThrow(/must be followed by/);
@@ -129,14 +129,14 @@ describe("roots", () => {
   });
 
   it("formats back to the same string", () => {
-    for (const root of ["ssh://backup//raid/backup", "ssh://bk@host:22/org", "/storage/emulated/0/org"]) {
+    for (const root of ["ssh://backup//srv/unison", "ssh://me@host:22/org", "/storage/emulated/0/org"]) {
       expect(formatRoot(parseRoot(root))).toBe(root);
     }
   });
 
   it("resolves prefer values like recon.ml", () => {
-    const roots = ["/storage/emulated/0/Documents/org", "ssh://backup//raid/backup/org"];
-    expect(resolveRootRef("ssh://backup//raid/backup/org", roots)).toBe(1);
+    const roots = ["/storage/emulated/0/Documents/org", "ssh://backup//srv/unison/org"];
+    expect(resolveRootRef("ssh://backup//srv/unison/org", roots)).toBe(1);
     expect(resolveRootRef("/storage", roots)).toBe(0);
     expect(resolveRootRef("backup", roots)).toBe(1);
     expect(resolveRootRef("org", roots)).toBe(null); // suffix of both
@@ -144,34 +144,34 @@ describe("roots", () => {
 });
 
 describe("validateProfile", () => {
-  it("accepts the phone profile", () => {
-    expect(validateProfile(parseProfile(PHONE))).toEqual([]);
+  it("accepts the Android profile", () => {
+    expect(validateProfile(parseProfile(ANDROID_PROFILE))).toEqual([]);
   });
 
   it("explains what Nouture needs from roots and storage", () => {
     expect(errors(DESKTOP.replace("/home/me", "home/me"))[0].message).toMatch(/absolute path/);
-    const warnings = validateProfile(parseProfile(PHONE.replace("fat = true\n", "")));
+    const warnings = validateProfile(parseProfile(ANDROID_PROFILE.replace("fat = true\n", "")));
     expect(warnings).toEqual([expect.objectContaining({ severity: "warning", pref: "fat" })]);
     expect(errors("root = /storage/a\n")[0].message).toMatch(/exactly two roots/);
   });
 
   it("rejects what unison rejects", () => {
-    expect(errors(PHONE + "batch = yes\n")[0].message).toBe("batch expects a boolean value, but yes is not a boolean");
-    expect(errors(PHONE + "perms = 0o1777\n")).toEqual([]);
-    expect(errors(PHONE + "perms = 777o\n")[0].message).toMatch(/not an integer/);
-    expect(errors(PHONE + "frobnicate = 1\n")[0].message).toBe("`frobnicate' is not a valid option");
-    expect(errors(PHONE + "ui = text\n")[0].message).toMatch(/command line-only/);
-    expect(errors(PHONE + "ignore = *.tmp\n")[0].message).toMatch(/Name, Path, BelowPath or Regex/);
-    expect(errors(PHONE + "ignore = Path /abs\n")[0].message).toMatch(/may not begin with a slash/);
-    expect(errors(PHONE + "path = ../up\n")[0].message).toMatch(/'\.\.' not allowed/);
-    expect(errors(PHONE + "backuploc = elsewhere\n")[0].message).toMatch(/'local' or 'central'/);
-    expect(errors(PHONE + "include common\n")).toEqual([]);
-    expect(errors(PHONE + "include a b\n")[0].message).toMatch(/Garbled 'include'/);
+    expect(errors(ANDROID_PROFILE + "batch = yes\n")[0].message).toBe("batch expects a boolean value, but yes is not a boolean");
+    expect(errors(ANDROID_PROFILE + "perms = 0o1777\n")).toEqual([]);
+    expect(errors(ANDROID_PROFILE + "perms = 777o\n")[0].message).toMatch(/not an integer/);
+    expect(errors(ANDROID_PROFILE + "frobnicate = 1\n")[0].message).toBe("`frobnicate' is not a valid option");
+    expect(errors(ANDROID_PROFILE + "ui = text\n")[0].message).toMatch(/command line-only/);
+    expect(errors(ANDROID_PROFILE + "ignore = *.tmp\n")[0].message).toMatch(/Name, Path, BelowPath or Regex/);
+    expect(errors(ANDROID_PROFILE + "ignore = Path /abs\n")[0].message).toMatch(/may not begin with a slash/);
+    expect(errors(ANDROID_PROFILE + "path = ../up\n")[0].message).toMatch(/'\.\.' not allowed/);
+    expect(errors(ANDROID_PROFILE + "backuploc = elsewhere\n")[0].message).toMatch(/'local' or 'central'/);
+    expect(errors(ANDROID_PROFILE + "include common\n")).toEqual([]);
+    expect(errors(ANDROID_PROFILE + "include a b\n")[0].message).toMatch(/Garbled 'include'/);
   });
 
   it("warns about Linux-only settings copied from a desktop profile", () => {
     const warned = (line: string) =>
-      validateProfile(parseProfile(PHONE + line + "\n"))
+      validateProfile(parseProfile(ANDROID_PROFILE + line + "\n"))
         .filter((i) => i.severity === "warning")
         .map((i) => i.pref);
     expect(warned("perms = 0o1777")).toEqual(["perms"]);
@@ -183,18 +183,18 @@ describe("validateProfile", () => {
     expect(warned("merge = Name *.org -> diff3 CURRENT1 CURRENTARCH CURRENT2")).toEqual(["merge"]);
   });
 
-  it("rejects what can't work on the phone", () => {
-    expect(errors(PHONE + "sshcmd = /usr/bin/ssh\n")[0].message).toMatch(/own SSH layer/);
-    expect(errors(PHONE + "repeat = watch\n")[0].message).toMatch(/once per sync/);
-    const socket = PHONE.replace("ssh://backup//", "socket://backup:4000/");
+  it("rejects what can't work on Android", () => {
+    expect(errors(ANDROID_PROFILE + "sshcmd = /usr/bin/ssh\n")[0].message).toMatch(/own SSH layer/);
+    expect(errors(ANDROID_PROFILE + "repeat = watch\n")[0].message).toMatch(/once per sync/);
+    const socket = ANDROID_PROFILE.replace("ssh://backup//", "socket://backup:4000/");
     expect(errors(socket)[0].message).toMatch(/socket/);
   });
 
   it("checks root references", () => {
-    expect(errors(PHONE + "prefer = newer\n")).toEqual([]);
-    expect(errors(PHONE + "prefer = backup\n")).toEqual([]);
-    expect(errors(PHONE + "prefer = elsewhere\n")[0].message).toMatch(/not uniquely identifying/);
-    expect(errors(PHONE + "nocreation = newer\n")[0].message).toMatch(/not uniquely identifying/);
+    expect(errors(ANDROID_PROFILE + "prefer = newer\n")).toEqual([]);
+    expect(errors(ANDROID_PROFILE + "prefer = backup\n")).toEqual([]);
+    expect(errors(ANDROID_PROFILE + "prefer = elsewhere\n")[0].message).toMatch(/not uniquely identifying/);
+    expect(errors(ANDROID_PROFILE + "nocreation = newer\n")[0].message).toMatch(/not uniquely identifying/);
   });
 
   it("checks pattern values", () => {
@@ -210,8 +210,27 @@ describe("validateProfile", () => {
   });
 
   it("checks that included profiles exist", () => {
-    const profile = parseProfile(PHONE + "include common\ninclude? optional\n");
+    const profile = parseProfile(ANDROID_PROFILE + "include common\ninclude? optional\n");
     expect(validateProfile(profile, ["common"])).toEqual([]);
     expect(validateProfile(profile, ["other"])[0].message).toMatch(/common not found/);
+  });
+});
+
+describe("sshargs and the server root", () => {
+  const warnings = (text: string) =>
+    validateProfile(parseProfile(text)).filter((i) => i.pref === "sshargs").map((i) => i.message);
+
+  it("warns when sshargs repeats the root's port or user", () => {
+    const withPort = ANDROID_PROFILE.replace("ssh://backup//", "ssh://me@backup:2222//");
+    expect(warnings(withPort + "sshargs = -p 2222 -l other\n")).toEqual([
+      "The server root already sets port 2222; ssh uses that one, so -p here is ignored.",
+      "The server root already sets user me; ssh uses that one, so -l here is ignored.",
+    ]);
+    expect(warnings(withPort + "sshargs = -Cp2222\n")).toHaveLength(1);
+  });
+
+  it("is fine when only sshargs sets them, like a desktop profile", () => {
+    expect(warnings(ANDROID_PROFILE + "sshargs = -p 2222\n")).toEqual([]);
+    expect(warnings(ANDROID_PROFILE + "sshargs = -i ~/.ssh/android -o Compression=yes\n")).toEqual([]);
   });
 });

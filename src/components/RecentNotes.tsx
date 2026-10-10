@@ -77,7 +77,7 @@ export const RecentNotes = () => {
 /** A 2:1 card; the preview is dimmed, the file name is not */
 const PreviewCard = ({ note, onOpen }: { note: NotePreview; onOpen: () => void }) => (
   <button
-    className="flex flex-col aspect-2/1 rounded-xl border border-amethyst-smoke/60 bg-graphite p-2 text-left cursor-pointer active:bg-dusty-grape/20"
+    className="flex flex-col aspect-2/1 rounded-xl bg-graphite p-2 text-left cursor-pointer active:bg-dusty-grape/20"
     onClick={onOpen}
   >
     <div className="relative flex-1 min-h-0 w-full overflow-hidden opacity-70">

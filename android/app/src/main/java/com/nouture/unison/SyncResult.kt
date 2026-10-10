@@ -17,11 +17,17 @@ data class SyncResult(
     val skipped: Int,
     val failed: Int,
     val conflicts: List<String>,
+    /** Why each conflict was skipped, e.g. "contents changed on both sides" */
+    val conflictReasons: Map<String, String>,
+    val failedPaths: List<String>,
     val changed: List<String>,
     val error: String?,
     val untrustedHost: HostNotTrustedException?,
     val output: List<String>,
 ) {
+    /** Unison got through the run: everything not skipped or failed is in sync */
+    val completed get() = summary != null && exitCode in 0..2
+
     fun toJson(): JSONObject = JSONObject().apply {
         put("profile", profile)
         put("reason", reason)
@@ -33,6 +39,8 @@ data class SyncResult(
         put("skipped", skipped)
         put("failed", failed)
         put("conflicts", JSONArray(conflicts))
+        put("conflictReasons", JSONObject(conflictReasons))
+        put("failedPaths", JSONArray(failedPaths))
         put("changed", JSONArray(changed))
         put("error", error)
         put("untrustedHost", untrustedHost != null)
@@ -44,7 +52,8 @@ data class SyncResult(
 
         private val SUMMARY = Regex("""^\s*(Synchronization (?:complete|incomplete) at .*|Nothing to do: .*)$""")
         private val COUNTS = Regex("""\((\d+) items? transferred, (\d+) skipped, (\d+) failed\)""")
-        private val SKIPPED = Regex("""^\s*skipped: (.+?) \(.*\)\s*$""")
+        private val SKIPPED = Regex("""^\s*skipped: (.+?) \((.*)\)\s*$""")
+        private val FAILED = Regex("""^\s*failed: (.+?)\s*$""")
         private val CHANGED = Regex("""^\[END] (?:Updating file|Copying|Deleting) (.+?)\s*$""")
         private val FATAL = Regex("""^\s*Fatal error.*""")
 
@@ -71,6 +80,9 @@ data class SyncResult(
                 skipped = counts?.get(2)?.toInt() ?: 0,
                 failed = counts?.get(3)?.toInt() ?: 0,
                 conflicts = output.mapNotNull { SKIPPED.find(it)?.groupValues?.get(1) }.distinct(),
+                conflictReasons = output.mapNotNull { SKIPPED.find(it)?.groupValues }
+                    .associate { it[1] to it[2] },
+                failedPaths = output.mapNotNull { FAILED.find(it)?.groupValues?.get(1) }.distinct(),
                 changed = output.mapNotNull { CHANGED.find(it)?.groupValues?.get(1) }.distinct(),
                 error = error ?: bridgeFailure?.message
                     ?: output.lastOrNull { FATAL.matches(it) }?.trim()

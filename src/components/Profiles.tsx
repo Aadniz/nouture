@@ -1,13 +1,16 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Button } from "../fragments/Button";
+import { Button, Chip } from "../fragments/Button";
+import { CheckIcon } from "../fragments/Checkbox";
 import { Box, Column, SubHeader, Wrapper } from "../fragments/Elements";
 import { Modal } from "../fragments/Modal";
 import { IconButton } from "../fragments/Page";
 import { Icon } from "../icons/icon";
-import { HostKey, Profile, Unison } from "../plugins/unison";
+import { HostKey, Profile, SyncResult, Unison } from "../plugins/unison";
 import { useUnisonStore } from "../stores/unisonStore";
+import { parseRoot } from "../unison/profile";
 import { prettyDateTime } from "../utils/date";
+import { conflictPath } from "./ConflictPage";
 import { SyncLog } from "./SyncLog";
 
 interface TestState {
@@ -21,7 +24,10 @@ export const Profiles = () => {
   const { profiles, error, refresh, sync, setAutoSync } = useUnisonStore();
   const [logFor, setLogFor] = useState<string | null>(null);
   const [tests, setTests] = useState<Record<string, TestState>>({});
-  const [hostKey, setHostKey] = useState<{ profile: string; key: HostKey } | null>(null);
+  const [hostKey, setHostKey] = useState<{
+    profile: string;
+    key: HostKey;
+  } | null>(null);
 
   useEffect(() => {
     refresh();
@@ -32,8 +38,12 @@ export const Profiles = () => {
     try {
       await Unison.requestLocalNetwork();
       const result = await Unison.testConnection({ name });
-      setTests((t) => ({ ...t, [name]: { ok: result.ok, message: result.message } }));
-      if (result.unknownHostKey) setHostKey({ profile: name, key: result.unknownHostKey });
+      setTests((t) => ({
+        ...t,
+        [name]: { ok: result.ok, message: result.message },
+      }));
+      if (result.unknownHostKey)
+        setHostKey({ profile: name, key: result.unknownHostKey });
     } catch (e) {
       setTests((t) => ({ ...t, [name]: { ok: false, message: String(e) } }));
     }
@@ -67,7 +77,10 @@ export const Profiles = () => {
                 profile={profile}
                 test={tests[profile.name]}
                 onTest={() => test(profile.name)}
-                onEdit={() => navigate(`/profile?name=${encodeURIComponent(profile.name)}`)}
+                onEdit={() =>
+                  navigate(`/profile?name=${encodeURIComponent(profile.name)}`)
+                }
+                onResolve={(path) => navigate(conflictPath(profile.name, path))}
                 onLog={() => setLogFor(profile.name)}
                 onSync={() =>
                   Unison.requestLocalNetwork().then(() => sync(profile.name))
@@ -86,7 +99,6 @@ export const Profiles = () => {
         </Button>
       </Wrapper>
 
-
       <SyncLog profile={logFor} onClose={() => setLogFor(null)} />
 
       <Modal
@@ -99,8 +111,12 @@ export const Profiles = () => {
       >
         {hostKey && (
           <Column className="gap-1 text-center">
-            <span className="text-navajo-white break-all">{hostKey.key.host}</span>
-            <span className="text-amethyst-smoke text-sm">{hostKey.key.type}</span>
+            <span className="text-navajo-white break-all">
+              {hostKey.key.host}
+            </span>
+            <span className="text-amethyst-smoke text-sm">
+              {hostKey.key.type}
+            </span>
             <span className="font-mono text-desert-sand text-sm break-all">
               {hostKey.key.fingerprint}
             </span>
@@ -116,6 +132,7 @@ const ProfileCard = ({
   test,
   onTest,
   onEdit,
+  onResolve,
   onLog,
   onSync,
   onAutoSync,
@@ -124,59 +141,54 @@ const ProfileCard = ({
   test?: TestState;
   onTest: () => void;
   onEdit: () => void;
+  onResolve: (path: string) => void;
   onLog: () => void;
   onSync: () => void;
   onAutoSync: () => void;
 }) => {
   const result = profile.lastResult;
-  const failed = !!result && (!!result.error || result.exitCode !== 0);
 
   return (
-    <Box className={profile.running ? "border-apricot" : ""}>
-      <div className="absolute top-0 right-0 flex gap-1">
-        <IconButton onClick={onTest} disabled={test?.testing} title="Test connection">
+    <Box className={`text-left p-3`}>
+      <div className="flex items-center gap-2">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <h2 className="truncate">{profile.name}</h2>
+            {profile.running && (
+              <div
+                className="w-2 h-2 bg-apricot rounded-full animate-pulse shrink-0"
+                title="Syncing"
+              />
+            )}
+          </div>
+          <div className="text-amethyst-smoke text-sm truncate">
+            {serverOf(profile)}
+          </div>
+        </div>
+        <IconButton
+          className="px-2"
+          onClick={onTest}
+          disabled={test?.testing}
+          title="Test connection"
+        >
           <Icon title={test?.testing ? "arrow_repeat" : "reception_4"} />
         </IconButton>
-        <IconButton onClick={onLog} title="Sync log">
+        <IconButton className="px-2" onClick={onLog} title="Sync log">
           <Icon title="terminal" />
         </IconButton>
-        <IconButton onClick={onEdit} title="Edit profile">
+        <IconButton className="px-2" onClick={onEdit} title="Edit profile">
           <Icon title="gear_wide_connected" />
         </IconButton>
       </div>
 
-      <div className="flex items-center justify-center gap-2 mb-1 mt-4">
-        {profile.running && (
-          <div
-            className="w-2 h-2 bg-apricot rounded-full animate-pulse"
-            title="Syncing"
-          />
-        )}
-        <h2>{profile.name}</h2>
-      </div>
-
-      <div className="text-amethyst-smoke text-sm break-all">
-        {profile.roots.join(" ⇄ ")}
-      </div>
-
-      <div className="text-amethyst-smoke text-sm mt-1">
-        <i>
-          Last synced:{" "}
-          {result ? prettyDateTime(new Date(result.finishedAt)) : "never"}
-        </i>
-      </div>
-
-      {result && (
-        <div className={`text-sm mt-1 wrap-break-word ${failed ? "text-dusty-rose" : "text-lilac"}`}>
-          {result.error ?? result.summary ?? `unison exited with code ${result.exitCode}`}
-          {result.conflicts.map((path) => (
-            <div key={path}>Conflict: {path}</div>
-          ))}
-        </div>
-      )}
+      {result && <Status result={result} onResolve={onResolve} />}
 
       {test?.message && (
-        <div className={`text-sm mt-1 wrap-break-word ${test.ok ? "text-lilac" : "text-dusty-rose"}`}>
+        <div
+          className={`text-sm mt-1 wrap-break-word ${
+            test.ok ? "text-lilac" : "text-dusty-rose"
+          }`}
+        >
           {test.message}
         </div>
       )}
@@ -194,10 +206,74 @@ const ProfileCard = ({
           onClick={onAutoSync}
           title="Sync on open, save, file changes and app resume"
         >
-          <Icon title={profile.autoSync ? "toggle_on" : "toggle_off"} />
+          <CheckIcon checked={profile.autoSync} size={16} />
           Auto
         </Button>
+      </div>
+
+      <div className="text-amethyst-smoke text-xs mt-1">
+        <i>
+          {result
+            ? `Last synced ${prettyDateTime(new Date(result.finishedAt))}`
+            : "Never synced"}
+        </i>
       </div>
     </Box>
   );
 };
+
+/** The last sync in a few words, instead of unison's summary line */
+const Status = ({
+  result,
+  onResolve,
+}: {
+  result: SyncResult;
+  onResolve: (path: string) => void;
+}) => {
+  const conflicts = result.conflicts.length;
+  const failed = result.failedPaths?.length || result.failed;
+  const problem =
+    result.error ??
+    (conflicts
+      ? `${plural(conflicts, "conflict")} to resolve`
+      : failed
+      ? `${plural(failed, "file")} failed to sync`
+      : null);
+
+  return (
+    <div className="text-sm mt-1">
+      {problem ? (
+        <div className="text-dusty-rose wrap-break-word">{problem}</div>
+      ) : (
+        <div className="text-lilac">
+          {result.transferred
+            ? `Synced ${plural(result.transferred, "file")}`
+            : "Up to date"}
+        </div>
+      )}
+      {result.conflicts.map((path) => (
+        <div key={path} className="flex items-center gap-2 mt-1">
+          <span className="flex-1 truncate text-desert-sand">{path}</span>
+          <Chip className="text-white" onClick={() => onResolve(path)}>
+            Resolve
+          </Chip>
+        </div>
+      ))}
+    </div>
+  );
+};
+
+/** "me@example.com" for ssh://me@example.com:2222//srv/... */
+const serverOf = (profile: Profile) => {
+  for (const root of profile.roots) {
+    try {
+      const { protocol, user, host } = parseRoot(root);
+      if (protocol !== "file" && host) return user ? `${user}@${host}` : host;
+    } catch {
+      // Not parseable: shown as text in the profile's settings
+    }
+  }
+  return "";
+};
+
+const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;

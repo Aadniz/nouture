@@ -317,7 +317,7 @@ const SHARED_STORAGE = /^\/(storage|sdcard)\//;
 
 /**
  * Validates a profile like unison would load it (checked against unison's
- * own parser), plus what Nouture needs on the phone. `profiles` lists the
+ * own parser), plus what Nouture needs on Android. `profiles` lists the
  * existing profile names, to check includes.
  */
 export const validateProfile = (profile: Profile, profiles?: string[]): Issue[] => {
@@ -377,6 +377,7 @@ export const validateProfile = (profile: Profile, profiles?: string[]): Issue[] 
     });
   } else {
     issues.push(...checkNoutureRoots(roots));
+    issues.push(...checkSshargs(roots, valueOf(profile, "sshargs")));
     const local = roots.find((r) => SHARED_STORAGE.test(r));
     const fat = ["true"].includes(valueOf(profile, "fat") ?? "");
     const perms = valueOf(profile, "perms");
@@ -470,7 +471,39 @@ const checkRule = (rule: ValueRule, value: string, roots: string[]): string | nu
   }
 };
 
-/** Nouture syncs a folder on the phone with an ssh:// root. */
+// ssh options that take a value; in a cluster like -Cp22 the first one counts
+const SSH_WITH_VALUE = "BbcDEeFIiJLlmOoPpQRSWw";
+
+/**
+ * unison runs `ssh -l <user> -p <port> <host> -e none <sshargs> ...` and ssh
+ * keeps the first port and user it's given, so these in sshargs lose to the root's.
+ */
+const checkSshargs = (roots: string[], sshargs: string | undefined): Issue[] => {
+  if (!sshargs) return [];
+  const remote = roots.flatMap((r) => {
+    try {
+      const root = parseRoot(r);
+      return root.protocol === "ssh" ? [root] : [];
+    } catch {
+      return [];
+    }
+  })[0];
+  if (!remote) return [];
+
+  const flags = new Set(
+    sshargs
+      .split(/\s+/)
+      .filter((t) => t.startsWith("-") && t !== "--")
+      .map((t) => [...t.slice(1)].find((c) => SSH_WITH_VALUE.includes(c)))
+  );
+  const issues: Issue[] = [];
+  const warn = (message: string) => issues.push({ pref: "sshargs", severity: "warning", message });
+  if (flags.has("p") && remote.port) warn(`The server root already sets port ${remote.port}; ssh uses that one, so -p here is ignored.`);
+  if (flags.has("l") && remote.user) warn(`The server root already sets user ${remote.user}; ssh uses that one, so -l here is ignored.`);
+  return issues;
+};
+
+/** Nouture syncs a folder on Android with an ssh:// root. */
 const checkNoutureRoots = (roots: string[]): Issue[] => {
   const parsed = roots.map((r) => {
     try {
@@ -488,9 +521,9 @@ const checkNoutureRoots = (roots: string[]): Issue[] => {
     error("Nouture only supports ssh:// roots for the server (socket connections aren't encrypted).");
   }
   if (local.length !== 1 || ssh.length !== 1) {
-    error("Nouture needs one folder on this phone and one ssh:// root.");
+    error("Nouture needs one folder on Android and one ssh:// root.");
   } else if (!local[0]!.path?.startsWith("/")) {
-    error("The root on this phone must be an absolute path, like /storage/emulated/0/Documents/org.");
+    error("The Android root must be an absolute path, like /storage/emulated/0/Documents/org.");
   }
   return issues;
 };

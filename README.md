@@ -2,7 +2,7 @@
 
 Sync emacs org notes over unison.
 
-The phone runs the real unison (2.53.8, static arm64) with Linux-style
+Nouture runs the real unison (2.53.8, static arm64) with Linux-style
 `~/.unison/*.prf` profiles and `~/.ssh/config`, so it syncs like another
 computer with the same setup. Notes sync when opened, saved, changed by other
 apps and when the app is resumed, like the Emacs hooks do on the desktop.
@@ -17,7 +17,7 @@ npm test                            # org parser/edit tests
 npm run run:android
 ```
 
-## Setup on the phone
+## Setup on Android
 
 1. Grant "All files access" so the org folder can live in shared storage.
 2. SSH: generate a key and add its public key to the server's `~/.ssh/authorized_keys`,
@@ -26,7 +26,7 @@ npm run run:android
    ```
    Host backup
      HostName example.com
-     Port 6665
+     Port 2222
      User me
    ```
 

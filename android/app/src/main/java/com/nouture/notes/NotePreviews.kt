@@ -23,7 +23,7 @@ object NotePreviews {
         dir.mkdirs()
         val index = runCatching { JSONObject(indexFile.readText()) }.getOrElse { JSONObject() }
 
-        val files = roots.filter { it.isDirectory }
+        val all = roots.filter { it.isDirectory }
             .flatMap { root ->
                 root.walkTopDown()
                     .onEnter { it == root || !it.name.startsWith(".") }
@@ -31,15 +31,17 @@ object NotePreviews {
                     .toList()
             }
             .distinct()
-            .sortedWith(compareByDescending<File> { it.lastModified() }.thenBy { it.name })
 
+        // Compare contents, not mtime + size: Android's shared storage puts a
+        // replaced file's old mtime back, and many org edits keep the size
+        val now = System.currentTimeMillis()
         var dirty = false
-        for (file in files) {
+        for (file in all) {
             val entry = index.optJSONObject(file.path)
-            // Unchanged since last time? (size too: some tools keep the mtime)
-            if (entry?.optLong("mtime") == file.lastModified() && entry.optLong("size") == file.length()) continue
-
             val text = file.readText()
+            val hash = sha1(text)
+            if (entry?.optString("hash") == hash) continue
+
             val snapshot = File(dir, sha1(file.path))
             val existed = snapshot.exists()
             val region = if (existed) changedRegion(lines(snapshot.readText()), lines(text)) else null
@@ -47,9 +49,12 @@ object NotePreviews {
 
             // Only touched (same text)? Keep pointing at the last real edit
             val keep = entry?.takeIf { existed && region == null && it.has("start") }
+            // A change Nouture has seen happen counts from when it noticed it;
+            // a file seen for the first time from its mtime
+            val noticed = entry?.has("hash") == true
             index.put(file.path, JSONObject().apply {
-                put("mtime", file.lastModified())
-                put("size", file.length())
+                put("hash", hash)
+                put("changedAt", if (noticed) maxOf(file.lastModified(), now) else file.lastModified())
                 when {
                     region != null -> put("start", region.first).put("end", region.last)
                     keep != null -> put("start", keep.getInt("start")).put("end", keep.getInt("end"))
@@ -59,12 +64,14 @@ object NotePreviews {
         }
         if (dirty) indexFile.writeText(index.toString())
 
+        val changedAt = { file: File -> index.optJSONObject(file.path)?.optLong("changedAt") ?: file.lastModified() }
+        val files = all.sortedWith(compareByDescending<File> { changedAt(it) }.thenBy { it.name })
         val notes = files.take(limit).map { file ->
             val entry = index.optJSONObject(file.path)
             Note(
                 path = file.path,
                 name = file.name,
-                mtime = file.lastModified(),
+                mtime = changedAt(file),
                 text = file.readText(),
                 edited = entry?.takeIf { it.has("start") }?.let { it.getInt("start")..it.getInt("end") },
             )

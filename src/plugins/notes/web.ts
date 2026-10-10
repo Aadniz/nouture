@@ -18,15 +18,15 @@ export class NotesWeb extends WebPlugin implements NotesPlugin {
     return { entries: [] };
   }
 
-  async stat(): Promise<{ exists: boolean; mtime: number; size: number }> {
+  async stat(): Promise<{ exists: boolean; size: number; hash: string | null }> {
     throw this.unimplemented("Not available on web");
   }
 
-  async readFile(): Promise<{ text: string; mtime: number; size: number }> {
+  async readFile(): Promise<{ text: string; size: number; hash: string }> {
     throw this.unimplemented("Not available on web");
   }
 
-  async writeFile(): Promise<{ conflict: boolean; mtime: number }> {
+  async writeFile(): Promise<{ conflict: boolean; hash: string }> {
     throw this.unimplemented("Not available on web");
   }
 

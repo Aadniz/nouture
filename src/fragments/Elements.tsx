@@ -27,16 +27,29 @@ export const SubHeader = tw.h3`
   mb-1
 `;
 
-export const Input = tw.input`
-  bg-jet-black
+const InputBase = tw.input`
+  bg-shadow-grey
   text-desert-sand
   outline-0
   rounded-lg
   p-2
 `;
 
+/**
+ * Inputs here hold paths, hosts, patterns and names, never prose: the
+ * keyboard shouldn't capitalize, autocorrect or spellcheck them.
+ */
+export const Input = (props: React.ComponentProps<typeof InputBase>) => (
+  <InputBase
+    autoCapitalize="off"
+    autoCorrect="off"
+    spellCheck={false}
+    {...props}
+  />
+);
+
 export const Select = tw.select`
-  bg-jet-black
+  bg-shadow-grey
   text-desert-sand
   outline-0
   rounded-lg
@@ -44,7 +57,7 @@ export const Select = tw.select`
 `;
 
 export const TextArea = tw.textarea`
-  bg-jet-black
+  bg-shadow-grey
   text-desert-sand
   outline-0
   rounded-lg
@@ -63,9 +76,7 @@ export const Label = tw.label`
 `;
 
 export const Box = tw.div`
-  border-amethyst-smoke
   bg-graphite
-  border
   m-2
   rounded-xl
   p-4

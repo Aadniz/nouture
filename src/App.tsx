@@ -6,6 +6,7 @@ import { RouterProvider, createHashRouter } from "react-router-dom";
 import tw from "tailwind-styled-components";
 
 import { Home } from "./components/Home";
+import { ConflictRoute } from "./components/ConflictPage";
 import { NoteBrowser } from "./components/NoteBrowser";
 import { NoteRoute } from "./components/NotePage";
 import { ProfileRoute } from "./components/ProfilePage";
@@ -17,12 +18,13 @@ const router = createHashRouter([
   { path: "/notes", element: <NoteBrowser /> },
   { path: "/note", element: <NoteRoute /> },
   { path: "/profile", element: <ProfileRoute /> },
+  { path: "/conflict", element: <ConflictRoute /> },
 ]);
 
 export const App = () => {
   const platform = Capacitor.getPlatform();
 
-  // Set phone edge colors
+  // Set Android edge colors
   if (platform === "android") {
     const color =
       getComputedStyle(document.documentElement).getPropertyValue(

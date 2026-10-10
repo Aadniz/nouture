@@ -100,11 +100,12 @@ export const prettyDateTime = (
   const seconds = Math.floor((now.getTime() - date.getTime()) / 1000);
 
   if (seconds < 10) {
-    // Within 10 seconds - show full date/time
-    return date
-      .toISOString()
-      .replace("T", " ")
-      .replace(/\.\d+Z$/, "");
+    // Within 10 seconds - show full date/time, in local time (toISOString is UTC)
+    const pad = (n: number) => String(n).padStart(2, "0");
+    return (
+      `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ` +
+      `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`
+    );
   } else if (seconds < 60) {
     // Within last minute
     const value = Math.max(1, seconds);

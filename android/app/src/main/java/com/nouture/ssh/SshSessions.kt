@@ -18,7 +18,7 @@ class HostKeyChangedException(host: String) :
     Exception("The host key of $host has CHANGED. Refusing to connect; remove the old key from known_hosts if this is expected.")
 
 class AuthFailedException(target: String) :
-    Exception("Authentication failed for $target. Is this phone's public key in the server's authorized_keys?")
+    Exception("Authentication failed for $target. Is this Android device's public key in the server's authorized_keys?")
 
 /** Opens JSch sessions the way OpenSSH would, using ~/.ssh/config, keys and known_hosts. */
 object SshSessions {
@@ -94,14 +94,20 @@ object SshSessions {
 
     /** Runs a command and returns its stdout (trimmed) and exit status. */
     fun exec(session: Session, command: String): Pair<String, Int> {
+        val (bytes, status) = execBytes(session, command)
+        return bytes.toString(Charsets.UTF_8).trim() to status
+    }
+
+    /** Runs a command and returns its exact stdout and exit status. */
+    fun execBytes(session: Session, command: String): Pair<ByteArray, Int> {
         val channel = session.openChannel("exec") as com.jcraft.jsch.ChannelExec
         channel.setCommand(command)
         val output = channel.inputStream
         channel.connect(15_000)
-        val text = output.readBytes().toString(Charsets.UTF_8).trim()
+        val bytes = output.readBytes()
         while (!channel.isClosed) Thread.sleep(20)
         channel.disconnect()
-        return text to channel.exitStatus
+        return bytes to channel.exitStatus
     }
 
     /** Appends a host key to ~/.ssh/known_hosts, in OpenSSH's format. */

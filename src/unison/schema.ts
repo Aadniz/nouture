@@ -90,7 +90,7 @@ export const PATTERN_VALUES: Record<string, ValueRule> = {
 export const PATTERN_KINDS = ["Name", "Path", "BelowPath", "Regex"] as const;
 
 // ---------------------------------------------------------------------------
-// How Nouture runs unison on the phone
+// How Nouture runs unison on Android
 
 export interface Support {
   level:
@@ -101,9 +101,7 @@ export interface Support {
     /** A Linux feature Android's shared storage lacks: not offered */
     | "incompatible"
     /** Irrelevant in Nouture: kept in the profile, not offered */
-    | "hidden"
-    /** Offered, with a hint about how it works on the phone */
-    | "info";
+    | "hidden";
   note: string;
   /** Values that deserve a warning when found in a profile */
   warnIf?: (value: string) => boolean;
@@ -118,6 +116,10 @@ const isZero = (v: string) => Number(v.replace(/_/g, "")) === 0;
 export const ANDROID: Record<string, Support> = {
   // Nouture runs unison itself
   batch: { level: "managed", note: "Nouture always runs unison in batch mode, like your Emacs hook." },
+  fastcheck: {
+    level: "managed",
+    note: "Nouture always compares file contents: Android's shared storage puts a replaced file's old modification time back, so a quick check by time and size misses edits.",
+  },
   ignorelocks: {
     level: "managed",
     note: "Nouture always ignores stale locks; Android may kill a sync midway, and Nouture never runs a profile twice at once.",
@@ -129,10 +131,10 @@ export const ANDROID: Record<string, Support> = {
     note: "Nouture connects through its own SSH layer; configure hosts in ~/.ssh/config instead.",
   },
   repeat: { level: "unsupported", note: "Nouture runs unison once per sync; use Auto sync instead." },
-  watch: { level: "unsupported", note: "No unison-fsmonitor on the phone; Nouture watches the folder itself." },
-  copyprog: { level: "unsupported", note: "rsync isn't available on the phone." },
-  copyprogrest: { level: "unsupported", note: "rsync isn't available on the phone." },
-  copythreshold: { level: "unsupported", note: "rsync isn't available on the phone." },
+  watch: { level: "unsupported", note: "No unison-fsmonitor on Android; Nouture watches the folder itself." },
+  copyprog: { level: "unsupported", note: "rsync isn't available on Android." },
+  copyprogrest: { level: "unsupported", note: "rsync isn't available on Android." },
+  copythreshold: { level: "unsupported", note: "rsync isn't available on Android." },
 
   // Linux features Android's shared storage doesn't have
   owner: { level: "incompatible", note: STORAGE, warnIf: isOn },
@@ -143,6 +145,11 @@ export const ANDROID: Record<string, Support> = {
   xattrignore: { level: "incompatible", note: STORAGE },
   xattrignorenot: { level: "incompatible", note: STORAGE },
   perms: { level: "incompatible", note: FAT, warnIf: (v) => !isZero(v) },
+  times: {
+    level: "incompatible",
+    note: "Android's shared storage puts a replaced file's old modification time back a few seconds later, so synced times don't stick and cause conflicts.",
+    warnIf: (v) => v === "true",
+  },
   dontchmod: { level: "incompatible", note: FAT, warnIf: (v) => v === "false" },
   ignorecase: { level: "incompatible", note: FAT, warnIf: (v) => v === "false" || v === "no" },
   ignoreinodenumbers: { level: "incompatible", note: FAT },
@@ -182,9 +189,10 @@ export const ANDROID: Record<string, Support> = {
   height: { level: "hidden", note: "Graphical interface only." },
   key: { level: "hidden", note: "Graphical interface only." },
   killserver: { level: "hidden", note: "Only for socket servers." },
-
-  // Offered, with a hint
-  sshargs: { level: "info", note: "Nouture's SSH understands -p, -l, -i and -o Key=Value." },
+  sshargs: {
+    level: "hidden",
+    note: "The server's port and user are set with the root; other ssh options belong in ~/.ssh/config.",
+  },
 };
 
 /** Whether a value found in a profile deserves the preference's Android note as a warning. */
@@ -196,8 +204,8 @@ export const warnsOnAndroid = (name: string, value: string) => {
 // ---------------------------------------------------------------------------
 // The profile page
 
-/** Shown with the roots, as they describe the phone's folder and the server. */
-export const ROOT_PREFS = ["fat", "sshargs"];
+/** Shown with the roots, as it describes the Android folder */
+export const ROOT_PREFS = ["fat"];
 
 /**
  * The page's sections, most common options first. The order follows what
@@ -205,7 +213,7 @@ export const ROOT_PREFS = ["fat", "sshargs"];
  * the sample profiles in unison's manual.
  */
 export const SECTIONS: { title: string; prefs: string[]; advanced?: boolean }[] = [
-  { title: "What to sync", prefs: ["ignore", "ignorenot", "path", "times"] },
+  { title: "What to sync", prefs: ["ignore", "ignorenot", "path"] },
   { title: "Conflicts", prefs: ["prefer", "copyonconflict"] },
   {
     title: "Backups",
@@ -226,7 +234,7 @@ export const SECTIONS: { title: string; prefs: string[]; advanced?: boolean }[] 
   {
     title: "Speed and limits",
     advanced: true,
-    prefs: ["fastcheck", "maxthreads", "maxsizethreshold", "maxerrors", "retry", "moves-experimental"],
+    prefs: ["maxthreads", "maxsizethreshold", "maxerrors", "retry", "moves-experimental"],
   },
   {
     title: "Other",

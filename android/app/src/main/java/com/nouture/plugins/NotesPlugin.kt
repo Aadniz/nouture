@@ -22,6 +22,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
+import org.json.JSONObject
 import java.io.File
 
 /** Plain file access to the synced note folders in shared storage. */
@@ -80,38 +81,43 @@ class NotesPlugin : Plugin() {
             }))
     }
 
+    /**
+     * Files are told apart by a hash of their contents, never by mtime:
+     * Android's shared storage puts a replaced file's old mtime back.
+     */
     @PluginMethod
     fun stat(call: PluginCall) = background(call) {
         val file = File(call.require("path"))
         JSObject()
             .put("exists", file.exists())
-            .put("mtime", file.lastModified())
             .put("size", file.length())
+            .put("hash", if (file.isFile) hash(file.readBytes()) else JSONObject.NULL)
     }
 
     @PluginMethod
     fun readFile(call: PluginCall) = background(call) {
-        val file = File(call.require("path"))
+        val bytes = File(call.require("path")).readBytes()
         JSObject()
-            .put("text", file.readText())
-            .put("mtime", file.lastModified())
-            .put("size", file.length())
+            .put("text", bytes.toString(Charsets.UTF_8))
+            .put("size", bytes.size)
+            .put("hash", hash(bytes))
     }
 
     /**
-     * Atomically replaces a file's contents. With expectedMtime, refuses to
+     * Atomically replaces a file's contents. With expectedHash, refuses to
      * overwrite a file that changed since it was read (e.g. by a sync).
      */
     @PluginMethod
     fun writeFile(call: PluginCall) = background(call) {
         val file = File(call.require("path"))
-        val text = call.require("text")
-        val expected = call.getDouble("expectedMtime")?.toLong()
-        if (expected != null && file.exists() && file.lastModified() != expected) {
-            return@background JSObject().put("conflict", true).put("mtime", file.lastModified())
+        val bytes = call.require("text").toByteArray(Charsets.UTF_8)
+        val expected = call.getString("expectedHash")
+        if (expected != null && file.isFile) {
+            val current = hash(file.readBytes())
+            if (current != expected) return@background JSObject().put("conflict", true).put("hash", current)
         }
-        write(file, text)
-        JSObject().put("conflict", false).put("mtime", file.lastModified())
+        write(file, bytes)
+        JSObject().put("conflict", false).put("hash", hash(bytes))
     }
 
     @PluginMethod
@@ -119,7 +125,7 @@ class NotesPlugin : Plugin() {
         val file = File(call.require("path"))
         require(!file.exists()) { "${file.name} already exists" }
         file.parentFile?.mkdirs()
-        write(file, call.getString("text") ?: "")
+        write(file, (call.getString("text") ?: "").toByteArray(Charsets.UTF_8))
         entryJson(file)
     }
 
@@ -128,9 +134,12 @@ class NotesPlugin : Plugin() {
         super.handleOnDestroy()
     }
 
-    private fun write(file: File, text: String) {
+    private fun hash(bytes: ByteArray) =
+        java.security.MessageDigest.getInstance("SHA-1").digest(bytes).joinToString("") { "%02x".format(it) }
+
+    private fun write(file: File, bytes: ByteArray) {
         val tmp = File(file.parentFile, ".nouture-${file.name}.tmp")
-        tmp.writeText(text)
+        tmp.writeBytes(bytes)
         FolderWatcher.noteSelfWrite(file)
         if (!tmp.renameTo(file)) {
             tmp.delete()

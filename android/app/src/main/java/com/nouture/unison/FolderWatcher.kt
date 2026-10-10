@@ -9,7 +9,7 @@ import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Watches the local roots of auto-sync profiles and syncs after changes made
- * by other apps (Orgzly, Markor, ...): the phone's "after-save-hook" for files
+ * by other apps (Orgzly, Markor, ...): Android's "after-save-hook" for files
  * Nouture didn't save itself.
  */
 object FolderWatcher {

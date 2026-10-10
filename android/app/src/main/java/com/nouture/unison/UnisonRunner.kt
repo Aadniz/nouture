@@ -53,6 +53,31 @@ object UnisonRunner {
         SyncWorker.enqueue(context, profile, reason)
     }
 
+    /**
+     * Runs unison right away with extra arguments (e.g. resolving one path),
+     * once any queued or running sync of the profile is done. Blocks.
+     */
+    fun runNow(context: Context, profile: String, reason: String, extraArgs: List<String>): SyncResult {
+        val deadline = System.currentTimeMillis() + TimeUnit.MINUTES.toMillis(TIMEOUT_MINUTES + 1)
+        while (true) {
+            val acquired = synchronized(lock) {
+                (profile !in running && profile !in queued).also { if (it) running += profile }
+            }
+            if (acquired) break
+            check(System.currentTimeMillis() < deadline) { "Another sync of $profile is still running" }
+            Thread.sleep(200)
+        }
+        try {
+            return run(profile, reason, extraArgs)
+        } finally {
+            val again = synchronized(lock) {
+                running -= profile
+                rerun.remove(profile)
+            }
+            if (again) request(context, profile, "rerun")
+        }
+    }
+
     /** Called by [SyncWorker]: syncs until no rerun was requested meanwhile. */
     fun runQueued(profile: String, reason: String) {
         synchronized(lock) {
@@ -70,7 +95,7 @@ object UnisonRunner {
         }
     }
 
-    private fun run(profile: String, reason: String): SyncResult {
+    private fun run(profile: String, reason: String, extraArgs: List<String> = emptyList()): SyncResult {
         listeners.forEach { it.onStarted(profile, reason) }
         val startedAt = System.currentTimeMillis()
         val output = mutableListOf<String>()
@@ -85,11 +110,19 @@ object UnisonRunner {
         try {
             Profiles.localRoot(profile)?.mkdirs()
             SshBridge(log).use { bridge ->
-                // Android kills apps (and their unison) at will, leaving archive locks
-                // behind. Runs are single-flight per profile, so any lock is stale.
                 val process = ProcessBuilder(
-                    NoutureHome.unisonBinary.path, profile,
-                    "-batch", "-ui", "text", "-ignorelocks", "-sshcmd", NoutureHome.sshHelper.path,
+                    listOf(
+                        NoutureHome.unisonBinary.path, profile, "-batch", "-ui", "text",
+                        // Android kills apps (and their unison) at will, leaving archive locks
+                        // behind. Runs are single-flight per profile, so any lock is stale.
+                        "-ignorelocks",
+                        // Android's shared storage puts a replaced file's old mtime back a
+                        // few seconds later. Fast checks trust mtime + size, so unison would
+                        // reuse stale cached fingerprints: phantom conflicts, or same-size
+                        // edits (TODO -> DONE) never synced. Always compare contents.
+                        "-fastcheck", "false",
+                        "-sshcmd", NoutureHome.sshHelper.path,
+                    ) + extraArgs
                 )
                     .directory(NoutureHome.home)
                     .redirectErrorStream(true)
@@ -132,10 +165,20 @@ object UnisonRunner {
             synchronized(output) { output.toList() }, bridgeFailure, error,
         )
         finishedAt[profile] = result.finishedAt
+        // What both replicas now agree on: the common ancestor for merging later conflicts
+        if (result.completed) {
+            runCatching { SyncBase.record(profile, result, extraArgs.pathArgs()) }
+                .onFailure { Log.w(TAG, "could not record synced versions of $profile", it) }
+        }
         SyncState.saveResult(result)
         listeners.forEach { it.onFinished(result) }
         return result
     }
+
+    /** The paths given with -path, or null for a run over the whole replica */
+    private fun List<String>.pathArgs(): List<String>? =
+        withIndex().filter { (i, arg) -> arg == "-path" && i + 1 < size }.map { (i, _) -> this[i + 1] }
+            .takeIf { it.isNotEmpty() }
 
     /** Text UI progress uses '\r'; treat it as a line break. */
     private fun Reader.forEachLine(onLine: (String) -> Unit) {

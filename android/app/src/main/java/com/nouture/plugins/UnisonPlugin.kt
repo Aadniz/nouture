@@ -13,9 +13,11 @@ import com.getcapacitor.annotation.PermissionCallback
 import com.nouture.ssh.HostNotTrustedException
 import com.nouture.ssh.Keys
 import com.nouture.ssh.SshSessions
+import com.nouture.unison.Conflicts
 import com.nouture.unison.FolderWatcher
 import com.nouture.unison.NoutureHome
 import com.nouture.unison.Profiles
+import com.nouture.unison.SyncBase
 import com.nouture.unison.SyncResult
 import com.nouture.unison.SyncState
 import com.nouture.unison.UnisonRunner
@@ -57,7 +59,7 @@ class UnisonPlugin : Plugin() {
         FolderWatcher.refresh(context)
     }
 
-    /** Opening the app is the phone's find-file-hook: pull in what changed elsewhere. */
+    /** Opening the app is Android's find-file-hook: pull in what changed elsewhere. */
     override fun handleOnResume() {
         super.handleOnResume()
         scope.launch {
@@ -127,6 +129,7 @@ class UnisonPlugin : Plugin() {
         val name = call.require("name")
         Profiles.delete(name)
         SyncState.forget(name)
+        SyncBase.forget(name)
         FolderWatcher.refresh(context)
         JSObject()
     }
@@ -143,6 +146,50 @@ class UnisonPlugin : Plugin() {
     fun sync(call: PluginCall) = background(call) {
         UnisonRunner.request(context, call.require("name"), call.getString("reason") ?: "manual")
         JSObject()
+    }
+
+    /** Both versions of a conflicting file, and the last version both sides agreed on. */
+    @PluginMethod
+    fun conflictDetails(call: PluginCall) = background(call) {
+        val name = call.require("name")
+        val path = call.require("path")
+        JSObject()
+            .put("path", path)
+            .put("reason", SyncState.lastResult(name)?.optJSONObject("conflictReasons")?.optString(path))
+            .put("serverHost", Profiles.remoteRoot(name)?.host)
+            .put("android", sideJson(Conflicts.local(name, path)))
+            .put("server", sideJson(Conflicts.remote(name, path)))
+            .put("base", SyncBase.read(name, path)?.let { sideJson(Conflicts.Side(true, it.size.toLong(), it, null)) })
+    }
+
+    /**
+     * Resolves a conflict like unison's interactive mode would: syncs just
+     * that path, preferring one side, then syncs everything for a fresh state.
+     */
+    @PluginMethod
+    fun resolveConflict(call: PluginCall) = background(call) {
+        val name = call.require("name")
+        val path = call.require("path")
+        val roots = Profiles.roots(name)
+        val androidRoot = roots.firstOrNull { "://" !in it } ?: throw IllegalArgumentException("No local root")
+        val serverRoot = roots.firstOrNull { it.startsWith("ssh://") } ?: throw IllegalArgumentException("No ssh:// root")
+
+        val args = when (val keep = call.require("keep")) {
+            "android" -> listOf("-path", path, "-prefer", androidRoot)
+            "server" -> listOf("-path", path, "-prefer", serverRoot)
+            // Android's version survives as a copy next to the server's
+            "both" -> listOf("-path", path, "-path", Conflicts.copyLocal(name, path), "-prefer", serverRoot)
+            "merged" -> {
+                Conflicts.writeLocal(name, path, call.require("text").toByteArray(Charsets.UTF_8))
+                listOf("-path", path, "-prefer", androidRoot)
+            }
+            else -> throw IllegalArgumentException("Unknown choice: $keep")
+        }
+        UnisonRunner.runNow(context, name, "resolve", args)
+        val result = UnisonRunner.runNow(context, name, "resolve", emptyList())
+        JSObject()
+            .put("resolved", path !in result.conflicts)
+            .put("result", JSObject.fromJSONObject(result.toJson()))
     }
 
     @PluginMethod
@@ -231,6 +278,21 @@ class UnisonPlugin : Plugin() {
         .put("autoSync", SyncState.isAutoSync(name))
         .put("running", UnisonRunner.isRunning(name))
         .put("lastResult", SyncState.lastResult(name)?.let { JSObject.fromJSONObject(it) } ?: JSONObject.NULL)
+
+    /** Text if it decodes as UTF-8 without NUL bytes; otherwise treated as binary */
+    private fun sideJson(side: Conflicts.Side): JSObject {
+        val text = side.bytes?.takeIf { bytes -> bytes.none { it == 0.toByte() } }?.let { bytes ->
+            runCatching {
+                Charsets.UTF_8.newDecoder().decode(java.nio.ByteBuffer.wrap(bytes)).toString()
+            }.getOrNull()
+        }
+        return JSObject()
+            .put("exists", side.exists)
+            .put("size", side.size)
+            .put("mtime", side.mtime ?: JSONObject.NULL)
+            .put("text", text ?: JSONObject.NULL)
+            .put("binary", side.bytes != null && text == null)
+    }
 
     private fun keyJson(key: Keys.Info): JSObject = JSObject()
         .put("name", key.name)

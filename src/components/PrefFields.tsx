@@ -1,5 +1,6 @@
 import { ReactNode, useState } from "react";
 import { Button, PRIMARY, SECONDARY } from "../fragments/Button";
+import { Checkbox } from "../fragments/Checkbox";
 import { Input, Row, Select } from "../fragments/Elements";
 import { IconButton } from "../fragments/Page";
 import { Icon } from "../icons/icon";
@@ -37,7 +38,7 @@ export const PrefField = (props: FieldProps) => {
     case "pattern":
       return <PatternListField {...props} />;
     case "stringList":
-      return rule?.type === "rootRef" ? <RootToggles {...props} /> : <ListField {...props} />;
+      return rule?.type === "rootRef" ? <RootChecks {...props} /> : <ListField {...props} />;
   }
   if (spec.name === "path") return <ListField {...props} placeholder="relative/path" />;
   if (rule?.type === "enum") return <ChoiceField {...props} options={rule.values} fallback={String(spec.default)} />;
@@ -73,7 +74,7 @@ export const FieldShell = ({
           className="flex flex-col flex-1 min-w-0 text-left cursor-pointer"
           onClick={() => setHelp(!help)}
         >
-          <span className="text-amethyst-smoke text-sm font-mono">{spec.name}</span>
+          <span className="text-blanched-almond text-sm font-mono">{spec.name}</span>
           <span className="text-xs text-amethyst-smoke">
             {spec.doc}
             {spec.help ? (help ? "" : " …") : ""}
@@ -86,9 +87,7 @@ export const FieldShell = ({
       )}
       {children}
       {note && note.level !== "managed" && !issues.some((i) => i.message === note.note) && (
-        <div className={`text-xs mt-1 ${note.level === "info" ? "text-amethyst-smoke" : "text-apricot"}`}>
-          {note.note}
-        </div>
+        <div className="text-xs text-apricot mt-1">{note.note}</div>
       )}
       <Issues issues={issues} />
     </div>
@@ -109,14 +108,8 @@ export const Issues = ({ issues, lines }: { issues: Issue[]; lines?: boolean }) 
   </>
 );
 
-const Toggle = ({ on, onClick, disabled }: { on: boolean; onClick?: () => void; disabled?: boolean }) => (
-  <IconButton onClick={onClick} disabled={disabled} title={on ? "true" : "false"}>
-    <Icon title={on ? "toggle_on" : "toggle_off"} width={24} height={24} />
-  </IconButton>
-);
-
 const ManagedField = ({ spec, issues }: FieldProps) => (
-  <FieldShell spec={spec} issues={issues} control={<Toggle on disabled />}>
+  <FieldShell spec={spec} issues={issues} control={<Checkbox checked disabled />}>
     <div className="text-xs text-apricot mt-1">{ANDROID[spec.name]?.note}</div>
   </FieldShell>
 );
@@ -127,7 +120,7 @@ const BoolField = ({ spec, values, onChange, issues }: FieldProps) => {
     <FieldShell
       spec={spec}
       issues={issues}
-      control={<Toggle on={on} onClick={() => onChange([String(!on)])} />}
+      control={<Checkbox checked={on} onChange={(checked) => onChange([String(checked)])} />}
     />
   );
 };
@@ -175,11 +168,11 @@ const ChoiceField = ({
   );
 };
 
-/** "this phone" for the local root, the host for a remote one */
+/** "Android" for the local root, the host for a remote one */
 const rootLabel = (root: string, index: number) => {
   try {
     const parsed = parseRoot(root);
-    return parsed.host ? parsed.host : "this phone";
+    return parsed.host ? parsed.host : "Android";
   } catch {
     return index === 0 ? "first root" : "second root";
   }
@@ -212,22 +205,18 @@ const RootChoiceField = ({
   );
 };
 
-/** nocreation/nodeletion/noupdate: one toggle per root */
-const RootToggles = ({ spec, values, onChange, issues, roots }: FieldProps) => {
+/** nocreation/nodeletion/noupdate: one check box per root */
+const RootChecks = ({ spec, values, onChange, issues, roots }: FieldProps) => {
   const active = roots.map((_, i) => values.some((v) => resolveRootRef(v, roots) === i));
   return (
     <FieldShell spec={spec} issues={issues}>
       {roots.map((root, i) => (
         <Row key={i} className="items-center">
           <span className="flex-1 min-w-0 text-sm text-desert-sand break-all">{rootLabel(root, i)}</span>
-          <Toggle
-            on={active[i]}
-            onClick={() =>
-              onChange(
-                active[i]
-                  ? values.filter((v) => resolveRootRef(v, roots) !== i)
-                  : [...values, root]
-              )
+          <Checkbox
+            checked={active[i]}
+            onChange={(checked) =>
+              onChange(checked ? [...values, root] : values.filter((v) => resolveRootRef(v, roots) !== i))
             }
           />
         </Row>
@@ -242,8 +231,6 @@ const TextField = ({ spec, values, onChange, issues, placeholder }: FieldProps &
       className="mt-1 w-full"
       value={values.at(-1) ?? ""}
       placeholder={placeholder}
-      spellCheck={false}
-      autoCapitalize="off"
       onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
         onChange(e.target.value === "" ? [] : [e.target.value])
       }
@@ -289,8 +276,6 @@ const ListField = ({ spec, values, onChange, issues, placeholder }: FieldProps &
           className="flex-1 min-w-0"
           value={values[i]}
           placeholder={placeholder}
-          spellCheck={false}
-          autoCapitalize="off"
           onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
             onChange(values.map((v, j) => (j === i ? e.target.value : v)))
           }
@@ -332,8 +317,6 @@ const PatternListField = ({ spec, values, onChange, issues }: FieldProps) => {
                 className="flex-1 min-w-0"
                 value={pattern.body}
                 placeholder={pattern.kind === "Regex" ? ".*\\.tmp" : "*.tmp"}
-                spellCheck={false}
-                autoCapitalize="off"
                 onChange={(e: React.ChangeEvent<HTMLInputElement>) => update(i, { body: e.target.value })}
               />
               {withValue && (
@@ -341,8 +324,6 @@ const PatternListField = ({ spec, values, onChange, issues }: FieldProps) => {
                   className="w-full"
                   value={pattern.value ?? ""}
                   placeholder={spec.name === "merge" ? "-> command" : "-> newer, older or a root"}
-                  spellCheck={false}
-                  autoCapitalize="off"
                   onChange={(e: React.ChangeEvent<HTMLInputElement>) => update(i, { value: e.target.value })}
                 />
               )}

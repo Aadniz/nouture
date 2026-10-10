@@ -1,0 +1,72 @@
+<!doctype html>
+<!--
+  Shown instead of the WebView's error page (Capacitor's server.errorPath),
+  i.e. when a live-reload build can't reach Vite on the PC. No Capacitor
+  plugins are available here.
+-->
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>Nouture: live reload</title>
+    <style>
+      body {
+        margin: 0;
+        min-height: 100vh;
+        background: #1f1f28;
+        color: #ffffff;
+        font-family: system-ui, sans-serif;
+      }
+      main {
+        margin: 3rem 1rem;
+        padding: 1rem;
+        border-radius: 0.5rem;
+        background: #282d4c;
+      }
+      h1 {
+        margin: 0 0 0.5rem;
+        font-size: 1.25rem;
+        color: #f7d9af;
+      }
+      p {
+        color: #9e8abe;
+        line-height: 1.4;
+      }
+      code {
+        color: #ebc6ac;
+        background: #1f1f28;
+        border-radius: 0.25rem;
+        padding: 0.1rem 0.3rem;
+      }
+      button {
+        width: 100%;
+        margin-top: 0.5rem;
+        padding: 0.6rem;
+        border: 0;
+        border-radius: 0.5rem;
+        font: inherit;
+        font-weight: bold;
+        color: #ffffff;
+        background: #9e8abe;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Can't reach Vite on your PC</h1>
+      <p>
+        This is a live-reload build: it loads its UI from Vite on your PC
+        (<code>localhost:3113</code>), but Vite isn't running or the PC isn't
+        connected.
+      </p>
+      <p>
+        Run <code>npm run dev:android</code> to start debugging.
+        To use Nouture without your PC, install the normal app with
+        <code>npm run run:android</code>.
+      </p>
+      <button onclick="location.href = 'http://localhost:3113/'">Try
+        again</button>
+    </main>
+  </body>
+</html>

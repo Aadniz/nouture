@@ -28,15 +28,18 @@ export interface NotesPlugin {
   listDir(options: { path: string }): Promise<{ entries: NoteEntry[] }>;
   stat(options: {
     path: string;
-  }): Promise<{ exists: boolean; mtime: number; size: number }>;
+  }): Promise<{ exists: boolean; size: number; hash: string | null }>;
   readFile(options: {
     path: string;
-  }): Promise<{ text: string; mtime: number; size: number }>;
-  /** With expectedMtime, refuses to overwrite a file that changed meanwhile. */
+  }): Promise<{ text: string; size: number; hash: string }>;
+  /**
+   * With expectedHash, refuses to overwrite a file that changed meanwhile.
+   * (Hashes, not mtimes: Android's shared storage puts old mtimes back.)
+   */
   writeFile(options: {
     path: string;
     text: string;
-    expectedMtime?: number;
-  }): Promise<{ conflict: boolean; mtime: number }>;
+    expectedHash?: string;
+  }): Promise<{ conflict: boolean; hash: string }>;
   createFile(options: { path: string; text?: string }): Promise<NoteEntry>;
 }

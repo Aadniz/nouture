@@ -21,3 +21,17 @@ export const Button = ({ children, className, ...rest }: ButtonProps) => {
     </button>
   );
 };
+
+/** A small secondary button, for compact actions */
+export const Chip = tw.button`
+  font-bold
+  rounded-lg
+  py-1
+  px-3
+  text-sm
+  transition-colors
+  cursor-pointer
+  bg-dusty-grape
+  hover:bg-dusty-grape/90
+  active:bg-lavender-grey/60
+`;

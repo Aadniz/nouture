@@ -14,5 +14,10 @@ export default defineConfig({
   server: {
     host: true,
     port: 3113,
+    // Live-reload builds on Android load this exact port: fail instead of
+    // quietly moving to another one when it's taken
+    strictPort: true,
+    // Builds write there; reloading the app for them is just noise
+    watch: { ignored: ["**/android/**", "**/dist/**"] },
   },
 });

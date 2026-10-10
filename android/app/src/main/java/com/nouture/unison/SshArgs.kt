@@ -2,7 +2,7 @@ package com.nouture.unison
 
 /**
  * The ssh invocation unison hands to -sshcmd, e.g.
- *   [sshargs...] -p 6665 -l bk backup -e none unison -server
+ *   [sshargs...] -p 2222 -l me backup -e none unison -server
  */
 data class SshArgs(
     val host: String,
@@ -33,17 +33,18 @@ data class SshArgs(
                     }
                     if (!arg.startsWith("-") || arg.length < 2) return true
 
-                    // Flags can be clustered (-TC) and a value can be attached (-p6665)
+                    // Flags can be clustered (-TC) and a value can be attached (-p2222)
                     for (j in 1 until arg.length) {
                         val flag = arg[j]
                         if (flag !in WITH_VALUE) continue
                         val value = if (j + 1 < arg.length) arg.substring(j + 1)
                         else argv.getOrNull(++i) ?: throw IllegalArgumentException("ssh: option -$flag needs a value")
+                        // Like OpenSSH, the first value given wins
                         when (flag) {
-                            'p' -> port = value.toIntOrNull() ?: throw IllegalArgumentException("ssh: bad port '$value'")
-                            'l' -> user = value
+                            'p' -> port = port ?: value.toIntOrNull() ?: throw IllegalArgumentException("ssh: bad port '$value'")
+                            'l' -> user = user ?: value
                             'i' -> identities += value
-                            'o' -> parseOption(value)?.let { (key, v) -> options[key] = v }
+                            'o' -> parseOption(value)?.let { (key, v) -> options.putIfAbsent(key, v) }
                         }
                         break
                     }
@@ -55,11 +56,10 @@ data class SshArgs(
             // Like OpenSSH, options may also follow the host ("backup -e none unison -server")
             val moreOptions = parseOptions()
             val destination = argv.getOrNull(i++) ?: throw IllegalArgumentException("ssh: no host given")
-            if (moreOptions) parseOptions()
-
             val at = destination.lastIndexOf('@')
             val host = if (at > 0) destination.substring(at + 1) else destination
-            if (at > 0) user = destination.substring(0, at)
+            if (at > 0) user = user ?: destination.substring(0, at)
+            if (moreOptions) parseOptions()
 
             options.remove("port")?.let { port = port ?: it.toIntOrNull() }
             options.remove("user")?.let { user = user ?: it }
