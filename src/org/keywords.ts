@@ -49,3 +49,43 @@ export const sequenceOf = (sequences: TodoSequence[], keyword: string) =>
   sequences.find(
     (s) => s.active.includes(keyword) || s.done.includes(keyword)
   );
+
+/**
+ * How a keyword is shown, after Doom's faces: +org-todo-active (STRT, [-]),
+ * +org-todo-project (PROJ), +org-todo-onhold (WAIT, HOLD, [?]) and
+ * +org-todo-cancel (NO, KILL); other open ones look like TODO.
+ */
+export type KeywordKind = "todo" | "active" | "project" | "onhold" | "done" | "cancel";
+
+const KINDS: Record<string, KeywordKind> = {
+  STRT: "active",
+  "[-]": "active",
+  PROJ: "project",
+  WAIT: "onhold",
+  HOLD: "onhold",
+  "[?]": "onhold",
+  NO: "cancel",
+  KILL: "cancel",
+};
+
+export const keywordKind = (sequences: TodoSequence[], keyword: string): KeywordKind =>
+  KINDS[keyword] ?? (isDone(sequences, keyword) ? "done" : "todo");
+
+/** Checkbox-style states like "[ ]" belong together, apart from word states */
+export const isBoxKeyword = (keyword: string) => /^\[.\]$/.test(keyword);
+
+/**
+ * The states offered for a headline: first those of the same style as its
+ * current one (done states, then open ones), then the rest.
+ */
+export const pickerGroups = (sequences: TodoSequence[], current: string | null) => {
+  const box = current !== null && isBoxKeyword(current);
+  const same = (k: string) => isBoxKeyword(k) === box;
+  const done = sequences.flatMap((s) => s.done);
+  const open = sequences.flatMap((s) => s.active);
+  return {
+    done: done.filter(same),
+    open: open.filter(same),
+    other: [...open, ...done].filter((k) => !same(k)),
+  };
+};

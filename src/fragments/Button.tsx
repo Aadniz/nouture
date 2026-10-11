@@ -6,6 +6,8 @@ export const PRIMARY =
   "bg-amethyst-smoke hover:bg-amethyst-smoke/90 active:bg-lavender-grey/80";
 export const SECONDARY =
   "bg-jet-black hover:bg-jet-black/90 active:bg-dusty-grape/20";
+/** Delete and other actions that lose data */
+export const DANGER = "bg-dusty-rose/20 hover:bg-dusty-rose/30 text-dusty-rose";
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   children: ReactNode;
@@ -13,7 +15,7 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 
 export const Button = ({ children, className, ...rest }: ButtonProps) => {
   const baseClasses =
-    "font-bold rounded-lg py-2 px-4 transition-colors cursor-pointer";
+    "font-bold rounded-lg p-2 transition-colors cursor-pointer";
 
   return (
     <button className={`${baseClasses} ${className || ""}`} {...rest}>

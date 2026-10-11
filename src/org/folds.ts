@@ -61,3 +61,17 @@ export const toggleOpen = (folds: Folds, line: number, kind: "drawer" | "block")
   ...folds,
   open: { ...folds.open, [line]: !isOpen(folds, line, kind) },
 });
+
+/** After deleting `count` lines from `start`: forget those, move the rest up. */
+export const removeLines = (folds: Folds, start: number, count: number): Folds => {
+  const shift = <T,>(byLine: Record<number, T>) =>
+    Object.fromEntries(
+      Object.entries(byLine).flatMap(([key, value]) => {
+        const line = Number(key);
+        if (line < start) return [[line, value]];
+        if (line < start + count) return [];
+        return [[line - count, value]];
+      })
+    ) as Record<number, T>;
+  return { ...folds, headlines: shift(folds.headlines), open: shift(folds.open) };
+};

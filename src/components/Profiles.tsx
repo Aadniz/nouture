@@ -150,7 +150,7 @@ const ProfileCard = ({
 
   return (
     <Box className={`text-left p-3`}>
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-1">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
             <h2 className="truncate">{profile.name}</h2>
@@ -173,7 +173,7 @@ const ProfileCard = ({
         >
           <Icon title={test?.testing ? "arrow_repeat" : "reception_4"} />
         </IconButton>
-        <IconButton className="px-2" onClick={onLog} title="Sync log">
+        <IconButton className="px-2" onClick={onLog} title="Show logs">
           <Icon title="terminal" />
         </IconButton>
         <IconButton className="px-2" onClick={onEdit} title="Edit profile">

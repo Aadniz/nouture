@@ -9,22 +9,30 @@ interface PageProps {
   title: string;
   actions?: ReactNode;
   children: ReactNode;
+  /** Exactly the screen's height, so content (e.g. an editor) can fill it */
+  fill?: boolean;
 }
 
 /** A sub page: compact bar with back button instead of the big logo header. */
-export const Page = ({ title, actions, children }: PageProps) => {
+export const Page = ({ title, actions, children, fill }: PageProps) => {
   const navigate = useNavigate();
   return (
-    <>
-      <TopBar className="safe-area-top shadow-lg">
+    <div className={fill ? "flex flex-col h-dvh" : ""}>
+      <TopBar className="safe-area-top shadow-lg shrink-0">
         <IconButton onClick={() => navigate(-1)} title="Back">
           <Icon title="arrow_left" width={20} height={20} />
         </IconButton>
         <PageTitle>{title}</PageTitle>
         {actions}
       </TopBar>
-      <main className="container mx-auto py-4">{children}</main>
-    </>
+      <main
+        className={`container mx-auto ${
+          fill ? "flex-1 min-h-0 flex flex-col pt-4 pb-2" : "py-4"
+        }`}
+      >
+        {children}
+      </main>
+    </div>
   );
 };
 
@@ -40,7 +48,7 @@ const TopBar = tw(Wrapper)`
   gap-1
   sticky
   top-0
-  z-[5]
+  z-5
 `;
 
 const PageTitle = tw.h3`

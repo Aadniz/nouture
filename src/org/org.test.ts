@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { setTodo, toggleCheckbox } from "./edit";
+import { deleteEntry, setTodo, toggleCheckbox } from "./edit";
 import { parseInline } from "./inline";
-import { DOOM_SEQUENCES, todoSequences } from "./keywords";
+import { DOOM_SEQUENCES, keywordKind, pickerGroups, todoSequences } from "./keywords";
 import { flatten, parse, serialize } from "./parse";
+import { removeLines } from "./folds";
 import { snippet } from "./snippet";
 
 const NOTES = `#+TITLE: Tasks
@@ -187,5 +188,70 @@ describe("snippet", () => {
     const { crumbs, lines } = snippet(doc, undefined, 2);
     expect(crumbs).toEqual([]);
     expect(lines.map((l) => l.text)).toEqual(["* Main tasks", "** HOLD Expand filesystem"]);
+  });
+});
+
+describe("pickerGroups", () => {
+  it("offers word states together, checkbox states apart", () => {
+    expect(pickerGroups(DOOM_SEQUENCES, "TODO")).toEqual({
+      done: ["DONE", "KILL", "OKAY", "YES", "NO"],
+      open: ["TODO", "PROJ", "LOOP", "STRT", "WAIT", "HOLD", "IDEA"],
+      other: ["[ ]", "[-]", "[?]", "[X]"],
+    });
+    expect(pickerGroups(DOOM_SEQUENCES, "[ ]")).toEqual({
+      done: ["[X]"],
+      open: ["[ ]", "[-]", "[?]"],
+      other: ["TODO", "PROJ", "LOOP", "STRT", "WAIT", "HOLD", "IDEA", "DONE", "KILL", "OKAY", "YES", "NO"],
+    });
+  });
+
+  it("knows Doom's kinds of keywords", () => {
+    const kinds = ["TODO", "STRT", "PROJ", "HOLD", "DONE", "NO", "[ ]", "[-]", "[X]"].map((k) =>
+      keywordKind(DOOM_SEQUENCES, k)
+    );
+    expect(kinds).toEqual(["todo", "active", "project", "onhold", "done", "cancel", "todo", "active", "done"]);
+  });
+});
+
+describe("deleteEntry", () => {
+  it("removes the entry with its sub-entries and fixes the parent's cookie", () => {
+    const line = lineOf(NOTES, "TODO Status bar");
+    const { text, removed } = deleteEntry(NOTES, line);
+    expect(removed).toBe(1);
+    expect(text.split("\n")[lineOf(NOTES, "Update dotfiles")]).toBe("** [2/2] Update dotfiles");
+    expect(text).not.toContain("Status bar");
+
+    const parent = deleteEntry(NOTES, lineOf(NOTES, "Update dotfiles"));
+    expect(parent.removed).toBe(4);
+    expect(parent.text).not.toContain("Editor config");
+    expect(parent.text).toContain("** TODO [#A] Buy a hat");
+  });
+
+  it("takes the body, drawers and planning lines along", () => {
+    const { text } = deleteEntry(NOTES, lineOf(NOTES, "Buy a hat"));
+    expect(text).not.toMatch(/Buy a hat|SCHEDULED|ARCHIVE_TIME/);
+    expect(text).toContain("** [1/3] Wishlist");
+  });
+
+  it("keeps line endings and how the file ends", () => {
+    const crlf = "* a\r\n** b\r\ntext\r\n* c";
+    expect(deleteEntry(crlf, 1).text).toBe("* a\r\n* c");
+    expect(deleteEntry(crlf, 3).text).toBe("* a\r\n** b\r\ntext");
+    expect(deleteEntry("* a\n* b\n", 1).text).toBe("* a\n");
+  });
+
+  it("ignores lines that aren't headlines", () => {
+    expect(deleteEntry(NOTES, lineOf(NOTES, "- [X] Lamp"))).toEqual({ text: NOTES, removed: 0 });
+  });
+});
+
+describe("removeLines", () => {
+  it("forgets the deleted lines' folds and moves the rest up", () => {
+    const folds = { headlines: { 0: "subtree", 2: "folded", 5: "children" }, open: { 3: true, 7: false }, hideBlocks: false } as const;
+    expect(removeLines({ ...folds, headlines: { ...folds.headlines }, open: { ...folds.open } }, 2, 2)).toEqual({
+      headlines: { 0: "subtree", 3: "children" },
+      open: { 5: false },
+      hideBlocks: false,
+    });
   });
 });

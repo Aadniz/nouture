@@ -88,6 +88,39 @@ export const toggleCheckbox = (text: string, line: number): string => {
 };
 
 /**
+ * org-cut-subtree: removes a headline with its body and sub-entries, then
+ * updates the parent's [n/m]. Returns the text and how many lines went.
+ */
+export const deleteEntry = (text: string, line: number): { text: string; removed: number } => {
+  const doc = parse(text);
+  const path = headlinePath(doc.headlines, line);
+  const headline = path[path.length - 1];
+  if (!headline || headline.line !== line) return { text, removed: 0 };
+
+  // Up to the next headline of the same or a higher level
+  let end = line + 1;
+  while (end < doc.lines.length) {
+    const stars = /^(\*+)\s/.exec(doc.lines[end]);
+    if (stars && stars[1].length <= headline.level) break;
+    end++;
+  }
+  const lines = [...doc.lines];
+  const eols = [...doc.eols];
+  lines.splice(line, end - line);
+  eols.splice(line, end - line);
+  // Removing the last lines: the file still ends like it did
+  if (end === doc.lines.length && line > 0) eols[line - 1] = doc.eols[doc.lines.length - 1];
+
+  const parent = path[path.length - 2];
+  if (parent) {
+    const updated = parse(serialize({ lines, eols }));
+    const fresh = headlinePath(updated.headlines, parent.line).pop();
+    if (fresh) lines[parent.line] = recountHeadline(updated, fresh);
+  }
+  return { text: serialize({ lines, eols }), removed: end - line };
+};
+
+/**
  * A headline's [n/m] counts the checkboxes in its entry if it has any,
  * otherwise its direct children that have a TODO keyword.
  */

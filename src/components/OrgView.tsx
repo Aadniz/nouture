@@ -2,14 +2,18 @@ import { MouseEvent } from "react";
 import { Icon } from "../icons/icon";
 import { Folds, cycle, isOpen, toggleOpen, visibilityOf } from "../org/folds";
 import { Inline, parseInline } from "../org/inline";
-import { isDone } from "../org/keywords";
+import { isDone, keywordKind } from "../org/keywords";
 import { Block, Headline, OrgDocument } from "../org/parse";
+import { useLongPress } from "../hooks/useLongPress";
+import { KeywordLabel } from "./KeywordLabel";
 
 interface Context {
   doc: OrgDocument;
   folds: Folds;
   onFolds: (folds: Folds) => void;
   onTodo: (headline: Headline) => void;
+  /** Long press on a headline */
+  onEntryHold: (headline: Headline) => void;
   onCheckbox: (line: number) => void;
   onOpenFile: (target: string) => void;
 }
@@ -35,12 +39,19 @@ const HeadlineView = ({ headline: h, ctx }: { headline: Headline; ctx: Context }
   const visibility = visibilityOf(ctx.folds, h);
   const foldable = h.children.length > 0 || h.body.some((b) => b.kind !== "blank");
   const done = !!h.keyword && isDone(ctx.doc.sequences, h.keyword);
-  const color = done ? "text-lavender-grey" : LEVEL_COLORS[(h.level - 1) % LEVEL_COLORS.length];
+  const color = done ? "text-lavender-grey/50" : LEVEL_COLORS[(h.level - 1) % LEVEL_COLORS.length];
   const toggle = () => foldable && ctx.onFolds(cycle(ctx.folds, h));
+  const hold = useLongPress(() => ctx.onEntryHold(h));
 
   return (
     <div className={h.level > 1 ? "pl-3" : ""}>
-      <div className="flex items-start gap-1 py-1 cursor-pointer" onClick={toggle}>
+      <div
+        className={`flex items-start gap-1 py-1 -mx-1 px-1 rounded-md cursor-pointer select-none [-webkit-touch-callout:none] transition-colors ${
+          hold.pressing ? "bg-dusty-grape/40 duration-500" : "duration-150"
+        }`}
+        onClick={toggle}
+        {...hold.handlers}
+      >
         <span className="text-lavender-grey w-4 pt-1 shrink-0">
           {foldable && (
             <Icon title={visibility === "folded" ? "chevron_right" : "chevron_down"} />
@@ -48,17 +59,19 @@ const HeadlineView = ({ headline: h, ctx }: { headline: Headline; ctx: Context }
         </span>
         <div className={`flex-1 font-bold wrap-break-word ${h.level === 1 ? "text-lg" : ""} ${color}`}>
           {h.keyword && (
-            <button
-              className={`mr-2 cursor-pointer ${done ? "text-lavender-grey" : "text-apricot"}`}
+            <KeywordLabel
+              className="mr-2 align-[0.1em]"
+              keyword={h.keyword}
+              kind={keywordKind(ctx.doc.sequences, h.keyword)}
               onClick={(e) => {
                 e.stopPropagation();
                 ctx.onTodo(h);
               }}
-            >
-              {h.keyword}
-            </button>
+            />
           )}
-          {h.priority && <span className="mr-2 text-dusty-rose">[#{h.priority}]</span>}
+          {h.priority && (
+            <span className={`mr-2 ${done ? "text-dusty-rose/50" : "text-dusty-rose"}`}>[#{h.priority}]</span>
+          )}
           <InlineText text={h.title} onOpenFile={ctx.onOpenFile} />
         </div>
         {h.tags.length > 0 && (

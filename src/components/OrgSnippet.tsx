@@ -1,8 +1,9 @@
 import { useMemo } from "react";
 import { Icon } from "../icons/icon";
-import { TodoSequence, allKeywords, isDone } from "../org/keywords";
+import { TodoSequence, allKeywords, isDone, keywordKind } from "../org/keywords";
 import { parse, parseHeadline, parseItem } from "../org/parse";
 import { snippet } from "../org/snippet";
+import { KeywordLabel } from "./KeywordLabel";
 import { InlineText, LEVEL_COLORS } from "./OrgView";
 
 const HEADLINE = /^(\*+)\s(.*)$/;
@@ -56,11 +57,11 @@ const Line = ({
   if (headline) {
     const h = parseHeadline(0, headline[1].length, headline[2], keywords);
     const done = !!h.keyword && isDone(sequences, h.keyword);
-    const color = done ? "text-lavender-grey" : LEVEL_COLORS[(h.level - 1) % LEVEL_COLORS.length];
+    const color = done ? "text-lavender-grey/50" : LEVEL_COLORS[(h.level - 1) % LEVEL_COLORS.length];
     return (
       <span className={`font-bold ${color}`}>
         {h.keyword && (
-          <span className={`mr-1 ${done ? "text-lavender-grey" : "text-apricot"}`}>{h.keyword}</span>
+          <KeywordLabel className="mr-1" size="xs" keyword={h.keyword} kind={keywordKind(sequences, h.keyword)} />
         )}
         {h.priority && <span className="mr-1 text-dusty-rose">[#{h.priority}]</span>}
         <InlineText text={h.title} />

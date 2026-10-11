@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useBlocker, useNavigate, useSearchParams } from "react-router-dom";
 import tw from "tailwind-styled-components";
-import { Button, PRIMARY, SECONDARY } from "../fragments/Button";
+import { Button, DANGER, PRIMARY, SECONDARY } from "../fragments/Button";
 import { Column, Input, Label, Row, SubHeader, TextArea, Wrapper } from "../fragments/Elements";
 import { Modal } from "../fragments/Modal";
 import { IconButton, Page } from "../fragments/Page";
@@ -33,7 +33,6 @@ fat = true
 `;
 
 const LINK_BUTTON = "text-amethyst-smoke hover:text-white text-sm mt-2";
-const DANGER = "bg-dusty-rose/20 hover:bg-dusty-rose/30 text-dusty-rose";
 
 /** /profile (new) or /profile?name=org-files; one page per profile */
 export const ProfileRoute = () => {

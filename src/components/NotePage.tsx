@@ -1,17 +1,18 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
-import { Button, PRIMARY, SECONDARY } from "../fragments/Button";
-import { Box, Column, TextArea } from "../fragments/Elements";
+import { useBlocker, useNavigate, useSearchParams } from "react-router-dom";
+import { Button, DANGER, PRIMARY, SECONDARY } from "../fragments/Button";
+import { Box, TextArea } from "../fragments/Elements";
 import { Modal } from "../fragments/Modal";
 import { IconButton, Page } from "../fragments/Page";
 import { Icon } from "../icons/icon";
-import { setTodo, toggleCheckbox } from "../org/edit";
-import { Folds, initialFolds } from "../org/folds";
+import { deleteEntry, setTodo, toggleCheckbox } from "../org/edit";
+import { Folds, initialFolds, removeLines } from "../org/folds";
 import { Headline, parse } from "../org/parse";
 import { Notes } from "../plugins/notes";
 import { fileName, useNotesStore } from "../stores/notesStore";
 import { profileForPath, useUnisonStore } from "../stores/unisonStore";
 import { conflictPath } from "./ConflictPage";
+import { DeleteEntryModal, StatePicker } from "./EntryModals";
 import { OrgView } from "./OrgView";
 import { notePath } from "./RecentNotes";
 
@@ -48,6 +49,7 @@ const NotePage = ({ path }: { path: string }) => {
   const [changedOnDisk, setChangedOnDisk] = useState(false);
   const [conflict, setConflict] = useState<string | null>(null);
   const [todoFor, setTodoFor] = useState<Headline | null>(null);
+  const [deleteFor, setDeleteFor] = useState<Headline | null>(null);
   const [folds, setFolds] = useState<Folds | null>(null);
 
   const bufferRef = useRef(buffer);
@@ -154,7 +156,9 @@ const NotePage = ({ path }: { path: string }) => {
     if (draft === undefined || (await save(draft))) {
       setDraft(path, null);
       setEditing(false);
+      return true;
     }
+    return false;
   };
 
   const discardEdits = () => {
@@ -172,6 +176,41 @@ const NotePage = ({ path }: { path: string }) => {
   };
 
   const lastFailed = !!profile?.lastResult && profile.lastResult.exitCode !== 0;
+  // The editor's text differs from the file
+  const unsaved = editing && draft !== undefined && !!buffer && draft !== buffer.text;
+  const unsavedRef = useRef(unsaved);
+  unsavedRef.current = unsaved;
+
+  // Leaving with unsaved changes (back arrow, Android's back button) or
+  // closing the editor with them asks first
+  const blocker = useBlocker(() => unsavedRef.current);
+  const [confirmClose, setConfirmClose] = useState(false);
+  const askingToLeave = blocker.state === "blocked" || confirmClose;
+
+  const closeEditor = () => (unsaved ? setConfirmClose(true) : discardEdits());
+
+  const stay = () => {
+    setConfirmClose(false);
+    blocker.reset?.();
+  };
+
+  const leaveDiscarding = () => {
+    setConfirmClose(false);
+    if (blocker.state === "blocked") {
+      setDraft(path, null);
+      blocker.proceed();
+    } else {
+      discardEdits();
+    }
+  };
+
+  const leaveSaving = async () => {
+    const saved = await saveEdit();
+    setConfirmClose(false);
+    if (blocker.state !== "blocked") return;
+    if (saved) blocker.proceed();
+    else blocker.reset();
+  };
 
   const actions = (
     <>
@@ -188,11 +227,14 @@ const NotePage = ({ path }: { path: string }) => {
       )}
       {editing ? (
         <>
-          <IconButton onClick={discardEdits} title="Discard changes">
+          <IconButton onClick={closeEditor} title="Close the editor">
             <Icon title="x_lg" />
           </IconButton>
-          <IconButton onClick={saveEdit} title="Save">
-            <Icon title="save" />
+          <IconButton onClick={saveEdit} title={unsaved ? "Save (unsaved changes)" : "Save"}>
+            <span className="relative inline-block">
+              <Icon title="save" />
+              {unsaved && <span className="absolute -top-1 -right-1.5 w-2 h-2 rounded-full bg-apricot" />}
+            </span>
           </IconButton>
         </>
       ) : (
@@ -204,7 +246,7 @@ const NotePage = ({ path }: { path: string }) => {
   );
 
   return (
-    <Page title={fileName(path)} actions={actions}>
+    <Page title={fileName(path)} actions={actions} fill={editing}>
       {error && <div className="text-dusty-rose text-sm px-4 wrap-break-word">{error}</div>}
 
       {syncConflict && profile && (
@@ -235,9 +277,9 @@ const NotePage = ({ path }: { path: string }) => {
       {!buffer ? (
         !error && <div className="text-center text-amethyst-smoke p-4">Loading...</div>
       ) : editing ? (
-        <div className="px-2">
+        <div className="px-2 flex-1 min-h-0 flex flex-col">
           <TextArea
-            className="w-full min-h-[75vh]"
+            className="w-full flex-1 resize-none"
             value={draft ?? buffer.text}
             spellCheck={false}
             autoCapitalize="off"
@@ -250,6 +292,7 @@ const NotePage = ({ path }: { path: string }) => {
           folds={folds}
           onFolds={setFolds}
           onTodo={setTodoFor}
+          onEntryHold={setDeleteFor}
           onCheckbox={(line) => applyEdit(toggleCheckbox(buffer.text, line))}
           onOpenFile={openFile}
         />
@@ -257,39 +300,46 @@ const NotePage = ({ path }: { path: string }) => {
         <pre className="px-4 whitespace-pre-wrap wrap-break-word font-mono text-sm">{buffer.text}</pre>
       )}
 
-      <Modal
-        title="Set state"
-        show={!!todoFor}
+      <StatePicker
+        headline={todoFor}
+        sequences={doc?.sequences ?? []}
+        onPick={(keyword) => {
+          if (buffer && todoFor) applyEdit(setTodo(buffer.text, todoFor.line, keyword));
+          setTodoFor(null);
+        }}
         onClose={() => setTodoFor(null)}
-      >
-        <Column className="gap-2">
-          {doc?.sequences.map((sequence, i) => (
-            <div key={i} className="flex flex-wrap gap-1 justify-center">
-              {[...sequence.active, ...sequence.done].map((keyword) => (
-                <Button
-                  key={keyword}
-                  className={`font-mono ${keyword === todoFor?.keyword ? PRIMARY : SECONDARY}`}
-                  onClick={() => {
-                    if (buffer && todoFor) applyEdit(setTodo(buffer.text, todoFor.line, keyword));
-                    setTodoFor(null);
-                  }}
-                >
-                  {keyword}
-                </Button>
-              ))}
-            </div>
-          ))}
-          <Button
-            className={SECONDARY}
-            onClick={() => {
-              if (buffer && todoFor) applyEdit(setTodo(buffer.text, todoFor.line, null));
-              setTodoFor(null);
-            }}
-          >
-            No state
+      />
+
+      <DeleteEntryModal
+        headline={deleteFor}
+        text={buffer?.text ?? ""}
+        file={fileName(path)}
+        onDelete={(headline) => {
+          if (buffer) {
+            const { text, removed } = deleteEntry(buffer.text, headline.line);
+            if (removed > 0) {
+              // Folding is kept per line: the lines below moved up
+              setFolds((f) => f && removeLines(f, headline.line, removed));
+              applyEdit(text);
+            }
+          }
+          setDeleteFor(null);
+        }}
+        onClose={() => setDeleteFor(null)}
+      />
+
+      <Modal
+        title="Unsaved changes"
+        description={`Discard your changes to ${fileName(path)}?`}
+        show={askingToLeave}
+        onClose={stay}
+        onSave={leaveSaving}
+        footer={
+          <Button className={`${DANGER} mr-auto`} onClick={leaveDiscarding}>
+            Discard
           </Button>
-        </Column>
-      </Modal>
+        }
+      />
 
       <Modal
         title="Changed on disk"
