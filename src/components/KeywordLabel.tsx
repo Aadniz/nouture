@@ -32,6 +32,12 @@ const BOX_PICKER_STYLES: Partial<Record<KeywordKind, string>> = {
   cancel: "text-dusty-rose",
 };
 
+/** A button that sets a keyword: the picker's colors, checkbox states on a dark ground */
+export const keywordButtonColors = (keyword: string, kind: KeywordKind) =>
+  isBoxKeyword(keyword)
+    ? `bg-jet-black active:bg-dusty-grape/40 ${BOX_PICKER_STYLES[kind] || BOX_STYLES[kind]}`
+    : `${PICKER_STYLES[kind] || KIND_STYLES[kind]} active:brightness-125`;
+
 const SIZES = {
   /** In note previews */
   xs: "rounded px-1 text-[0.85em]",

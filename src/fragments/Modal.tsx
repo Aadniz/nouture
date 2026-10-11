@@ -8,10 +8,14 @@ interface ModalProps {
   description?: string;
   onSave?: () => void;
   saveLabel?: string;
+  /** Replaces the save button's look, e.g. with a keyword's colors */
+  saveClassName?: string;
   onClose: () => void;
   show?: boolean;
   /** Extra buttons, placed before Close */
   footer?: React.ReactNode;
+  /** Extra buttons between Close and the save button */
+  beforeSave?: React.ReactNode;
 }
 
 export const Modal = ({
@@ -21,8 +25,10 @@ export const Modal = ({
   onClose,
   onSave,
   saveLabel = "Save",
+  saveClassName = "bg-amethyst-smoke hover:bg-amethyst-smoke/90 active:bg-lavender-grey/80",
   show,
   footer,
+  beforeSave,
 }: ModalProps) => {
   // Modals stay mounted (for the popup animation); start each opening at the top
   const content = useRef<HTMLDivElement>(null);
@@ -45,11 +51,9 @@ export const Modal = ({
           >
             Close
           </Button>
+          {beforeSave}
           {onSave && (
-            <Button
-              className="bg-amethyst-smoke hover:bg-amethyst-smoke/90 active:bg-lavender-grey/80"
-              onClick={() => onSave()}
-            >
+            <Button className={saveClassName} onClick={() => onSave()}>
               {saveLabel}
             </Button>
           )}

@@ -14,7 +14,7 @@ import {
   toggleCheckbox,
 } from "./edit";
 import { parseInline } from "./inline";
-import { DOOM_SEQUENCES, keywordKind, pickerGroups, todoSequences } from "./keywords";
+import { DOOM_SEQUENCES, keywordKind, pickerGroups, suggestedState, todoSequences } from "./keywords";
 import { flatten, knownTags, parse, priorities, serialize } from "./parse";
 import { cycle, initialFolds, isExpanded, remapFolds, unfold, visibilityOf } from "./folds";
 import { snippet } from "./snippet";
@@ -236,6 +236,35 @@ describe("pickerGroups", () => {
       keywordKind(DOOM_SEQUENCES, k)
     );
     expect(kinds).toEqual(["todo", "active", "project", "onhold", "done", "cancel", "todo", "active", "done"]);
+  });
+});
+
+describe("suggestedState", () => {
+  const next = (keyword: string | null) => suggestedState(DOOM_SEQUENCES, keyword);
+
+  it("gets open work done and opens finished work again", () => {
+    expect(["TODO", "PROJ", "STRT", "LOOP"].map(next)).toEqual(Array(4).fill("DONE"));
+    expect(["DONE", "KILL"].map(next)).toEqual(["TODO", "TODO"]);
+  });
+
+  it("starts waiting work and turns ideas into tasks", () => {
+    expect(["HOLD", "WAIT"].map(next)).toEqual(["STRT", "STRT"]);
+    expect(next("IDEA")).toBe("TODO");
+  });
+
+  it("ticks checkbox states, whatever their kind, and unticks a ticked one", () => {
+    expect(["[ ]", "[?]", "[-]"].map(next)).toEqual(Array(3).fill("[X]"));
+    expect(next("[X]")).toBe("[ ]");
+  });
+
+  it("makes a plain headline a task, and has nothing for a sequence without open states", () => {
+    expect(next(null)).toBe("TODO");
+    expect(next("OKAY")).toBeNull();
+  });
+
+  it("follows the file's own sequences", () => {
+    const custom = todoSequences(["#+TODO: TODO NEXT WAIT | DONE CANCELLED"]);
+    expect(["NEXT", "WAIT", "CANCELLED"].map((k) => suggestedState(custom, k))).toEqual(["DONE", "TODO", "TODO"]);
   });
 });
 

@@ -1,14 +1,14 @@
 import { useEffect, useState } from "react";
-import { Button, Chip, DANGER } from "../fragments/Button";
+import { Button, Chip, DANGER, SECONDARY } from "../fragments/Button";
 import { Column, Input, Output } from "../fragments/Elements";
 import { Modal } from "../fragments/Modal";
 import { Sheet, SheetRow } from "../fragments/Sheet";
 import { useLast } from "../hooks/useLast";
 import { Icon } from "../icons/icon";
 import { deleteEntry } from "../org/edit";
-import { TodoSequence, isBoxKeyword, keywordKind, pickerGroups } from "../org/keywords";
+import { TodoSequence, isBoxKeyword, keywordKind, pickerGroups, suggestedState } from "../org/keywords";
 import { Headline, flatten } from "../org/parse";
-import { KeywordLabel } from "./KeywordLabel";
+import { KeywordLabel, keywordButtonColors } from "./KeywordLabel";
 import { InlineText } from "./OrgView";
 
 export type EntryAction =
@@ -215,7 +215,8 @@ export const PriorityPicker = ({
 
 /**
  * org-todo: the states of the headline's own kind first (open ones, then
- * done ones), the others below.
+ * done ones), the others below. The button at the bottom right sets the
+ * state it most likely moves to next.
  */
 export const StatePicker = ({
   headline,
@@ -231,6 +232,7 @@ export const StatePicker = ({
   const shown = useLast(headline);
   const current = shown?.keyword ?? null;
   const groups = pickerGroups(sequences, current);
+  const next = suggestedState(sequences, current);
 
   const group = (label: string, keywords: string[], size: "sm" | "lg") =>
     keywords.length > 0 && (
@@ -258,8 +260,16 @@ export const StatePicker = ({
       description={shown?.title}
       show={!!headline}
       onClose={onClose}
-      onSave={() => onPick(null)}
-      saveLabel="Clear state"
+      beforeSave={
+        current !== null && (
+          <Button className={SECONDARY} onClick={() => onPick(null)}>
+            Clear state
+          </Button>
+        )
+      }
+      onSave={next ? () => onPick(next) : undefined}
+      saveLabel={next ?? undefined}
+      saveClassName={next ? `font-mono ${keywordButtonColors(next, keywordKind(sequences, next))}` : undefined}
     >
       <Column className="w-[70vw] gap-3">
         {group("Open", groups.open, "lg")}

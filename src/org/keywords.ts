@@ -75,6 +75,31 @@ export const keywordKind = (sequences: TodoSequence[], keyword: string): Keyword
 export const isBoxKeyword = (keyword: string) => /^\[.\]$/.test(keyword);
 
 /**
+ * The state a headline most likely moves to next, for the picker's quick
+ * button: open work gets done, finished work opens again, waiting work
+ * starts, and an idea becomes a task. It stays within the keyword's own
+ * sequence, so a PROJ never becomes a TODO. null when nothing is obvious.
+ */
+export const suggestedState = (sequences: TodoSequence[], current: string | null): string | null => {
+  if (current === null) {
+    return sequences.flatMap((s) => s.active).find((k) => !isBoxKeyword(k)) ?? null;
+  }
+  const sequence = sequenceOf(sequences, current);
+  if (!sequence) return null;
+  const kind = (k: string) => keywordKind(sequences, k);
+  if (sequence.done.includes(current)) return sequence.active[0] ?? null;
+  if (current === "IDEA") return sequence.active.find((k) => k !== "IDEA" && kind(k) === "todo") ?? null;
+  if (!isBoxKeyword(current) && kind(current) === "onhold") {
+    return (
+      sequence.active.find((k) => kind(k) === "active") ??
+      sequence.active.find((k) => kind(k) !== "onhold") ??
+      null
+    );
+  }
+  return sequence.done[0] ?? null;
+};
+
+/**
  * The states offered for a headline: first those of the same style as its
  * current one (open states, then done ones), then the rest.
  */
