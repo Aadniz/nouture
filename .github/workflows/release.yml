@@ -78,7 +78,15 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          # What's new: the message of an annotated tag (git tag -a), first.
+          # Checkout can leave the tag's message behind, so fetch the tag itself
+          git fetch --force origin "refs/tags/$GITHUB_REF_NAME:refs/tags/$GITHUB_REF_NAME"
+          {
+            git tag -l --format='%(if)%(*objecttype)%(then)%(contents)%(end)' "$GITHUB_REF_NAME"
+            echo
+            echo "Bundles Unison 2.53.8, built from source in this workflow"
+          } > "$RUNNER_TEMP/notes.md"
           gh release create "$GITHUB_REF_NAME" nouture-v*.apk* \
             --title "Nouture $GITHUB_REF_NAME" \
-            --notes "Bundles Unison 2.53.8, built from source in this workflow" \
+            --notes-file "$RUNNER_TEMP/notes.md" \
             --generate-notes
