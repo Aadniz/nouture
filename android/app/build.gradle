@@ -19,16 +19,16 @@ android {
     namespace = "com.nouture.app"
     compileSdk = rootProject.ext.compileSdkVersion
     defaultConfig {
-        applicationId "com.meowmeowteam.nouture"
-        minSdkVersion rootProject.ext.minSdkVersion
-        targetSdkVersion rootProject.ext.targetSdkVersion
+        applicationId = "com.meowmeowteam.nouture"
+        minSdk = rootProject.ext.minSdkVersion
+        targetSdk = rootProject.ext.targetSdkVersion
         // Must grow with every release: Android refuses to downgrade
-        versionCode major * 10000 + minor * 100 + patch
-        versionName appVersion
+        versionCode = major * 10000 + minor * 100 + patch
+        versionName = appVersion
         // Unison is only built for arm64: other phones can't install the app,
         // rather than installing one that can't sync
         ndk { abiFilters 'arm64-v8a' }
-        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
              // Default: https://android.googlesource.com/platform/frameworks/base/+/282e181b58cf72b6ca770dc7ca5f91f135444502/tools/aapt/AaptAssets.cpp#61
@@ -39,10 +39,10 @@ android {
         release {
             def store = keystore.storeFile ?: System.getenv('KEYSTORE_FILE')
             if (store) {
-                storeFile rootProject.file(store)
-                storePassword keystore.storePassword ?: System.getenv('KEYSTORE_PASSWORD')
-                keyAlias keystore.keyAlias ?: System.getenv('KEY_ALIAS')
-                keyPassword keystore.keyPassword ?: System.getenv('KEY_PASSWORD')
+                storeFile = rootProject.file(store)
+                storePassword = keystore.storePassword ?: System.getenv('KEYSTORE_PASSWORD')
+                keyAlias = keystore.keyAlias ?: System.getenv('KEY_ALIAS')
+                keyPassword = keystore.keyPassword ?: System.getenv('KEY_PASSWORD')
             }
         }
     }
@@ -50,14 +50,14 @@ android {
         debug {
             // A separate app next to the released one: same-id installs with
             // another key would make `cap run` uninstall it, data and all
-            applicationIdSuffix ".debug"
-            versionNameSuffix "-dev"
+            applicationIdSuffix = ".debug"
+            versionNameSuffix = "-dev"
         }
         release {
-            minifyEnabled false
+            minifyEnabled = false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
             if (signingConfigs.release.storeFile) {
-                signingConfig signingConfigs.release
+                signingConfig = signingConfigs.release
             }
         }
     }
