@@ -3,7 +3,7 @@ import { deleteEntry, setTodo, toggleCheckbox } from "./edit";
 import { parseInline } from "./inline";
 import { DOOM_SEQUENCES, keywordKind, pickerGroups, todoSequences } from "./keywords";
 import { flatten, parse, serialize } from "./parse";
-import { removeLines } from "./folds";
+import { cycle, initialFolds, isExpanded, removeLines, visibilityOf } from "./folds";
 import { snippet } from "./snippet";
 
 const NOTES = `#+TITLE: Tasks
@@ -260,11 +260,113 @@ describe("deleteEntry", () => {
 
 describe("removeLines", () => {
   it("forgets the deleted lines' folds and moves the rest up", () => {
-    const folds = { headlines: { 0: "subtree", 2: "folded", 5: "children" }, open: { 3: true, 7: false }, hideBlocks: false } as const;
+    const folds = { headlines: { 0: "subtree", 2: "folded", 5: "children" }, open: { 3: true, 7: false }, hideBlocks: false, hideDrawers: true } as const;
     expect(removeLines({ ...folds, headlines: { ...folds.headlines }, open: { ...folds.open } }, 2, 2)).toEqual({
       headlines: { 0: "subtree", 3: "children" },
       open: { 5: false },
       hideBlocks: false,
+      hideDrawers: true,
     });
+  });
+});
+
+const FOLD_NOTES = `* Top
+Top text
+** DONE Done child
+Done text
+** Child
+Child text
+*** Grandchild
+** Leaf
+Leaf text
+* Old :ARCHIVE:
+Old text
+* Pinned
+:PROPERTIES:
+:VISIBILITY: children
+:END:
+Pinned text
+** Kid
+Kid text
+`;
+
+/** The initial folds of FOLD_NOTES under the given #+STARTUP lines */
+const foldsOf = (startup: string) => {
+  const doc = parse(`${startup}\n${FOLD_NOTES}`);
+  const folds = initialFolds(doc);
+  const byTitle = Object.fromEntries(flatten(doc.headlines).map((h) => [h.title, h]));
+  const h = (title: string) => byTitle[title];
+  return { folds, h, state: (title: string) => visibilityOf(folds, h(title)) };
+};
+
+describe("initialFolds", () => {
+  it("shows everything without a #+STARTUP view, like Org's default, except done entries", () => {
+    // showchildren isn't an Org option
+    const { folds, state } = foldsOf("#+STARTUP: showchildren hideblocks");
+    expect(["Top", "Child", "Grandchild", "Leaf", "Old", "Pinned", "Kid"].map(state)).toEqual(Array(7).fill("subtree"));
+    expect(state("Done child")).toBe("folded");
+    // showeverything keeps drawers and blocks open, whatever else is set
+    expect(folds.hideBlocks).toBe(false);
+    expect(folds.hideDrawers).toBe(false);
+  });
+
+  it("shows done entries too when the file asks for showeverything", () => {
+    expect(foldsOf("#+STARTUP: showeverything").state("Done child")).toBe("subtree");
+  });
+
+  it("shows only the top level with overview or fold", () => {
+    for (const option of ["overview", "fold"]) {
+      const { folds, state } = foldsOf(`#+STARTUP: ${option}`);
+      expect(state("Top")).toBe("folded");
+      expect(folds.hideDrawers).toBe(true);
+    }
+  });
+
+  it("shows headlines without their text with content and show<N>levels", () => {
+    const content = foldsOf("#+STARTUP: content");
+    expect(["Top", "Child", "Grandchild", "Leaf"].map(content.state)).toEqual(Array(4).fill("headings"));
+    const two = foldsOf("#+STARTUP: show2levels");
+    expect(two.state("Top")).toBe("headings");
+    expect(two.state("Child")).toBe("folded");
+  });
+
+  it("follows :VISIBILITY: and folds :ARCHIVE: subtrees, except with showeverything", () => {
+    const { state } = foldsOf("#+STARTUP: showall");
+    expect(state("Pinned")).toBe("children");
+    expect(state("Kid")).toBe("folded");
+    expect(state("Old")).toBe("folded");
+    expect(foldsOf("").state("Old")).toBe("subtree");
+  });
+
+  it("lets the last view win, and hides blocks when asked", () => {
+    const { folds, state } = foldsOf("#+STARTUP: overview\n#+STARTUP: showall hideblocks");
+    expect(state("Top")).toBe("subtree");
+    expect(folds.hideBlocks).toBe(true);
+  });
+});
+
+describe("cycle", () => {
+  it("points the arrow down only when something below shows", () => {
+    const content = foldsOf("#+STARTUP: content");
+    expect(isExpanded(content.folds, content.h("Child"))).toBe(true);
+    expect(isExpanded(content.folds, content.h("Leaf"))).toBe(false);
+    const plain = foldsOf("");
+    expect(isExpanded(plain.folds, plain.h("Done child"))).toBe(false);
+  });
+
+  it("opens a headline that shows nothing in one go, like org-cycle", () => {
+    const { folds, h } = foldsOf("#+STARTUP: content");
+    expect(visibilityOf(cycle(folds, h("Leaf")), h("Leaf"))).toBe("subtree");
+  });
+
+  it("goes FOLDED, CHILDREN (text and folded sub-headlines), SUBTREE, FOLDED", () => {
+    const { folds: start, h } = foldsOf("#+STARTUP: overview");
+    let folds = cycle(start, h("Top"));
+    expect(visibilityOf(folds, h("Top"))).toBe("children");
+    expect(visibilityOf(folds, h("Child"))).toBe("folded");
+    folds = cycle(folds, h("Top"));
+    expect(visibilityOf(folds, h("Grandchild"))).toBe("subtree");
+    folds = cycle(folds, h("Top"));
+    expect(visibilityOf(folds, h("Top"))).toBe("folded");
   });
 });

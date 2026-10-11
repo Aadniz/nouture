@@ -1,6 +1,6 @@
 import { MouseEvent } from "react";
 import { Icon } from "../icons/icon";
-import { Folds, cycle, isOpen, toggleOpen, visibilityOf } from "../org/folds";
+import { Folds, cycle, isExpanded, isOpen, showsText, toggleOpen, visibilityOf } from "../org/folds";
 import { Inline, parseInline } from "../org/inline";
 import { isDone, keywordKind } from "../org/keywords";
 import { Block, Headline, OrgDocument } from "../org/parse";
@@ -54,7 +54,7 @@ const HeadlineView = ({ headline: h, ctx }: { headline: Headline; ctx: Context }
       >
         <span className="text-lavender-grey w-4 pt-1 shrink-0">
           {foldable && (
-            <Icon title={visibility === "folded" ? "chevron_right" : "chevron_down"} />
+            <Icon title={isExpanded(ctx.folds, h) ? "chevron_down" : "chevron_right"} />
           )}
         </span>
         <div className={`flex-1 font-bold wrap-break-word ${h.level === 1 ? "text-lg" : ""} ${color}`}>
@@ -78,7 +78,7 @@ const HeadlineView = ({ headline: h, ctx }: { headline: Headline; ctx: Context }
           <span className="text-xs text-lavender-grey pt-1">:{h.tags.join(":")}:</span>
         )}
       </div>
-      {visibility === "subtree" && (
+      {showsText(visibility) && (
         <div className="pl-5">
           <Body blocks={h.body} ctx={ctx} />
         </div>
