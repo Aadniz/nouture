@@ -112,7 +112,8 @@ def default_value(kind, text):
         return text == "true"
     if kind == "int":
         # e.g. "(0o777 (* rwxrwxrwx *) + 0o1000 (* Sticky bit *))" or "(-1)"
-        expr = re.sub(r"\(\*.*?\*\)", "", text).strip().removeprefix("(").removesuffix(")")
+        # (no str.removeprefix: CI runners may have Python 3.8)
+        expr = re.sub(r"^\(|\)$", "", re.sub(r"\(\*.*?\*\)", "", text).strip())
         try:
             return sum(int(term.replace(" ", ""), 0) for term in expr.split("+"))
         except ValueError:
