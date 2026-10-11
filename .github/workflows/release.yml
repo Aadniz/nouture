@@ -1,0 +1,84 @@
+# Publishes a GitHub release when a version tag is pushed:
+#
+#   git tag v0.1.0 && git push origin v0.1.0
+#
+# The tag is the version: the APK gets versionName 0.1.0 from it.
+# "Run workflow" on the Actions tab builds the APK without releasing it
+#
+# Runs on the self-hosted runner, whose Docker host runs arm64 images through qemu
+# (see scripts/build-unison-android.sh).
+name: Release
+
+on:
+  push:
+    tags: ["v*.*.*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: [self-hosted, linux, x64]
+    steps:
+      - uses: actions/checkout@v7
+
+      # Unison and the SSH helper, built from source in place of the ones in
+      # git (about 3 minutes under qemu)
+      - run: scripts/build-unison-android.sh
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 21
+      # The runner image has no Android SDK; Gradle installs what the build needs
+      - uses: android-actions/setup-android@v4
+        with:
+          log-accepted-android-sdk-licenses: false
+
+      - run: npm ci
+      - run: npm test
+      - run: npm run build:android
+
+      - name: Build and sign
+        working-directory: android
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          if [ "$GITHUB_REF_TYPE" = tag ]; then version=${GITHUB_REF_NAME#v}; else version=0.0.1; fi
+          echo "VERSION=$version" >> "$GITHUB_ENV"
+          # The runner's disk outlives the job: don't leave the key on it
+          export KEYSTORE_FILE="$RUNNER_TEMP/release.jks"
+          trap 'rm -f "$KEYSTORE_FILE"' EXIT
+          base64 -d <<< "$KEYSTORE_BASE64" > "$KEYSTORE_FILE"
+          ./gradlew test assembleRelease -PappVersion="$version"
+
+      - name: Check the signature
+        run: |
+          apk=nouture-v$VERSION.apk
+          mv android/app/build/outputs/apk/release/app-release.apk "$apk"
+          build_tools="$ANDROID_HOME/build-tools/$(ls "$ANDROID_HOME/build-tools" | sort -V | tail -1)"
+          "$build_tools/apksigner" verify --print-certs "$apk"
+          sha256sum "$apk" > "$apk.sha256"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: apk
+          path: nouture-v*.apk*
+
+      - name: Publish the release
+        if: github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" nouture-v*.apk* \
+            --title "Nouture $GITHUB_REF_NAME" \
+            --notes "Bundles Unison 2.53.8, built from source in this workflow" \
+            --generate-notes

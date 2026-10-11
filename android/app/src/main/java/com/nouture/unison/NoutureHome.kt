@@ -26,13 +26,20 @@ object NoutureHome {
     val sshDir get() = File(home, ".ssh")
     val stateDir get() = File(home, ".nouture")
 
-    /** Unison keys its archives on this; keep it stable per device. */
-    val hostname: String = "android-" + Build.MODEL.lowercase().replace(Regex("[^a-z0-9]+"), "-")
+    /**
+     * Unison keys its archives on this; keep it stable per device. The dev
+     * build is another "computer", so it never shares the server's archive
+     * with the released app.
+     */
+    lateinit var hostname: String
+        private set
 
     @Synchronized
     fun init(context: Context) {
         if (::home.isInitialized) return
         val app = context.applicationContext
+        val device = "android-" + Build.MODEL.lowercase().replace(Regex("[^a-z0-9]+"), "-")
+        hostname = if (app.packageName.endsWith(".debug")) "$device-dev" else device
         home = File(app.filesDir, "home")
         tmpDir = File(app.cacheDir, "tmp")
         listOf(home, unisonDir, sshDir, stateDir, tmpDir).forEach { it.mkdirs() }

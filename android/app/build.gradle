@@ -3,6 +3,15 @@ plugins {
     id 'kotlin-android'
 }
 
+// A release is a git tag like v0.1.0, which CI passes as -PappVersion=0.1.0
+def appVersion = (findProperty('appVersion') ?: '0.0.1').toString()
+def (major, minor, patch) = appVersion.tokenize('.-').take(3).collect { it.toInteger() }
+
+// The release key: android/keystore.properties here, environment variables in CI
+def keystore = new Properties()
+def keystoreFile = rootProject.file('keystore.properties')
+if (keystoreFile.exists()) keystoreFile.withInputStream { keystore.load(it) }
+
 android {
     kotlinOptions {
         jvmTarget = '21'
@@ -10,11 +19,15 @@ android {
     namespace = "com.nouture.app"
     compileSdk = rootProject.ext.compileSdkVersion
     defaultConfig {
-        applicationId "com.nouture.app"
+        applicationId "com.meowmeowteam.nouture"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0"
+        // Must grow with every release: Android refuses to downgrade
+        versionCode major * 10000 + minor * 100 + patch
+        versionName appVersion
+        // Unison is only built for arm64: other phones can't install the app,
+        // rather than installing one that can't sync
+        ndk { abiFilters 'arm64-v8a' }
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -22,10 +35,30 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    signingConfigs {
+        release {
+            def store = keystore.storeFile ?: System.getenv('KEYSTORE_FILE')
+            if (store) {
+                storeFile rootProject.file(store)
+                storePassword keystore.storePassword ?: System.getenv('KEYSTORE_PASSWORD')
+                keyAlias keystore.keyAlias ?: System.getenv('KEY_ALIAS')
+                keyPassword keystore.keyPassword ?: System.getenv('KEY_PASSWORD')
+            }
+        }
+    }
     buildTypes {
+        debug {
+            // A separate app next to the released one: same-id installs with
+            // another key would make `cap run` uninstall it, data and all
+            applicationIdSuffix ".debug"
+            versionNameSuffix "-dev"
+        }
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            if (signingConfigs.release.storeFile) {
+                signingConfig signingConfigs.release
+            }
         }
     }
     packagingOptions {

@@ -1,0 +1,6 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <!-- The dev build installs next to the released app -->
+    <string name="app_name">Nouture dev</string>
+    <string name="title_activity_main">Nouture dev</string>
+</resources>

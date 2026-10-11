@@ -9,7 +9,8 @@
 #   android.sh mirror    show and control the device's screen (scrcpy)
 set -euo pipefail
 
-APP=com.nouture.app
+# The dev build (debug builds get the .debug suffix)
+APP=com.meowmeowteam.nouture.debug
 VITE_PORT=3113
 DEVTOOLS_PORT=9222
 
