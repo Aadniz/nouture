@@ -184,6 +184,19 @@ describe("snippet", () => {
     expect(lines.map((l) => l.text)).toEqual(["  with armrests", "- [ ] Desk"]);
   });
 
+  it("fills up with the lines before an edit at the end", () => {
+    const line = lineOf(NOTES, "#+END_SRC");
+    const { crumbs, lines } = snippet(doc, { start: line, end: line }, 4);
+    expect(crumbs.at(-1)).toBe("Nested");
+    expect(lines.map((l) => l.text)).toEqual([
+      "  - [ ] Child two",
+      "#+BEGIN_SRC sh",
+      'echo "* not a headline"',
+      "#+END_SRC",
+    ]);
+    expect(lines.map((l) => l.edited)).toEqual([false, false, false, true]);
+  });
+
   it("starts at the content when the edit isn't known, skipping #+ lines and blanks", () => {
     const { crumbs, lines } = snippet(doc, undefined, 2);
     expect(crumbs).toEqual([]);
