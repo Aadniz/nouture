@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { Button, Chip, DANGER } from "../fragments/Button";
 import { Column, Input, Output } from "../fragments/Elements";
 import { Modal } from "../fragments/Modal";
-import { Sheet } from "../fragments/Sheet";
+import { Sheet, SheetRow } from "../fragments/Sheet";
+import { useLast } from "../hooks/useLast";
 import { Icon } from "../icons/icon";
 import { deleteEntry } from "../org/edit";
 import { TodoSequence, isBoxKeyword, keywordKind, pickerGroups } from "../org/keywords";
@@ -95,13 +96,6 @@ export const EntrySheet = ({
     </Sheet>
   );
 };
-
-const SheetRow = ({ className = "", ...rest }: React.ButtonHTMLAttributes<HTMLButtonElement>) => (
-  <button
-    className={`flex items-center gap-4 w-full px-3 py-3 rounded-lg text-left cursor-pointer active:bg-dusty-grape/40 ${className}`}
-    {...rest}
-  />
-);
 
 /** Org tags are letters, digits, _, @, # and % */
 const cleanTag = (tag: string) => tag.trim().replace(/^:+|:+$/g, "").replace(/[^\w@#%]+/g, "_");
@@ -217,13 +211,6 @@ export const PriorityPicker = ({
       </div>
     </Modal>
   );
-};
-
-/** Modals stay mounted for their animation: keep showing the last headline while closing */
-const useLast = <T,>(value: T | null) => {
-  const last = useRef(value);
-  if (value !== null) last.current = value;
-  return last.current;
 };
 
 /**

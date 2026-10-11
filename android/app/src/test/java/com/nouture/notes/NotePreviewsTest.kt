@@ -40,6 +40,17 @@ class NotePreviewsTest {
     }
 
     @Test
+    fun frontPagePutsPinnedFirstAndLeavesHiddenOut() {
+        val recent = listOf("/a.org", "/b.org", "/c.org", "/d.org")
+        assertEquals(
+            listOf("/c.org", "/a.org", "/d.org"),
+            NotePreviews.frontPage(recent, hidden = setOf("/b.org"), pinned = listOf("/c.org", "/gone.org")),
+        )
+        // Hidden wins over pinned
+        assertEquals(listOf("/a.org"), NotePreviews.frontPage(listOf("/a.org", "/b.org"), setOf("/b.org"), listOf("/b.org")))
+    }
+
+    @Test
     fun deletionPointsAtTheFollowingLine() {
         val new = base.toMutableList().apply { removeAt(2) }
         assertEquals(2..2, NotePreviews.changedRegion(base, new))

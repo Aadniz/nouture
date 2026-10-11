@@ -68,7 +68,9 @@ class NotesPlugin : Plugin() {
     @PluginMethod
     fun recentNotes(call: PluginCall) = background(call) {
         val roots = call.getArray("roots")?.toList<String>().orEmpty().map(::File)
-        val (notes, total) = NotePreviews.recent(roots, call.getInt("limit", 8) ?: 8)
+        val hidden = call.getArray("hidden")?.toList<String>().orEmpty().toSet()
+        val pinned = call.getArray("pinned")?.toList<String>().orEmpty()
+        val (notes, total) = NotePreviews.recent(roots, call.getInt("limit", 8) ?: 8, hidden, pinned)
         JSObject()
             .put("total", total)
             .put("notes", JSArray(notes.map { note ->
@@ -127,6 +129,33 @@ class NotesPlugin : Plugin() {
         file.parentFile?.mkdirs()
         write(file, (call.getString("text") ?: "").toByteArray(Charsets.UTF_8))
         entryJson(file)
+    }
+
+    /** Deletes a note, never a folder. Nouture syncs the deletion itself. */
+    @PluginMethod
+    fun deleteFile(call: PluginCall) = background(call) {
+        val file = File(call.require("path"))
+        require(file.isFile) { "${file.name} isn't a file" }
+        FolderWatcher.noteSelfWrite(file)
+        if (!file.delete()) throw IllegalStateException("Could not delete ${file.name}")
+        NotePreviews.forget(file.path)
+        JSObject()
+    }
+
+    /** Renames a note within its folder. Nouture syncs the change itself. */
+    @PluginMethod
+    fun renameFile(call: PluginCall) = background(call) {
+        val file = File(call.require("path"))
+        val name = call.require("name")
+        require(file.isFile) { "${file.name} isn't a file" }
+        require(name.isNotBlank() && '/' !in name && !name.startsWith(".")) { "\"$name\" can't be a file name" }
+        val target = File(file.parentFile, name)
+        require(!target.exists()) { "$name already exists" }
+        FolderWatcher.noteSelfWrite(file)
+        FolderWatcher.noteSelfWrite(target)
+        if (!file.renameTo(target)) throw IllegalStateException("Could not rename ${file.name}")
+        NotePreviews.rename(file.path, target.path)
+        entryJson(target)
     }
 
     override fun handleOnDestroy() {

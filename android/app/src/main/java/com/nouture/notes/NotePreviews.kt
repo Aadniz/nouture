@@ -17,9 +17,18 @@ object NotePreviews {
     private val dir get() = File(NoutureHome.stateDir, "snapshots")
     private val indexFile get() = File(dir, "index.json")
 
-    /** The `limit` most recently modified notes under `roots`, and how many there are. */
+    /**
+     * The front page: the `pinned` notes first (all of them, in that order),
+     * then the most recently modified ones up to `limit`, never the `hidden`
+     * ones. Also returns how many notes it could show.
+     */
     @Synchronized
-    fun recent(roots: List<File>, limit: Int): Pair<List<Note>, Int> {
+    fun recent(
+        roots: List<File>,
+        limit: Int,
+        hidden: Set<String> = emptySet(),
+        pinned: List<String> = emptyList(),
+    ): Pair<List<Note>, Int> {
         dir.mkdirs()
         val index = runCatching { JSONObject(indexFile.readText()) }.getOrElse { JSONObject() }
 
@@ -65,8 +74,11 @@ object NotePreviews {
         if (dirty) indexFile.writeText(index.toString())
 
         val changedAt = { file: File -> index.optJSONObject(file.path)?.optLong("changedAt") ?: file.lastModified() }
-        val files = all.sortedWith(compareByDescending<File> { changedAt(it) }.thenBy { it.name })
-        val notes = files.take(limit).map { file ->
+        val byPath = all.associateBy { it.path }
+        val recent = all.sortedWith(compareByDescending<File> { changedAt(it) }.thenBy { it.name })
+        val files = frontPage(recent.map { it.path }, hidden, pinned).map { byPath.getValue(it) }
+        val shownPinned = files.count { it.path in pinned }
+        val notes = files.take(maxOf(limit, shownPinned)).map { file ->
             val entry = index.optJSONObject(file.path)
             Note(
                 path = file.path,
@@ -77,6 +89,30 @@ object NotePreviews {
             )
         }
         return notes to files.size
+    }
+
+    /** Pinned paths that exist first, in pin order, then the rest; hidden ones left out */
+    fun frontPage(byRecency: List<String>, hidden: Set<String>, pinned: List<String>): List<String> {
+        val shown = byRecency.filter { it !in hidden }
+        return pinned.distinct().filter { it in shown } + shown.filter { it !in pinned }
+    }
+
+    /** A note was deleted: drop what was kept to preview it */
+    @Synchronized
+    fun forget(path: String) {
+        val index = runCatching { JSONObject(indexFile.readText()) }.getOrNull() ?: return
+        if (index.remove(path) != null) indexFile.writeText(index.toString())
+        File(dir, sha1(path)).delete()
+    }
+
+    /** A note was renamed: its preview keeps pointing at its last edit */
+    @Synchronized
+    fun rename(from: String, to: String) {
+        val index = runCatching { JSONObject(indexFile.readText()) }.getOrNull() ?: return
+        val entry = index.remove(from) ?: return
+        index.put(to, entry)
+        indexFile.writeText(index.toString())
+        File(dir, sha1(from)).renameTo(File(dir, sha1(to)))
     }
 
     /** Lines as the org parser numbers them */

@@ -9,7 +9,9 @@ export const Home = () => (
     <LogoWrapper className="safe-area-top shadow-lg">
       <div className="container mx-auto text-center">
         <Header>Nouture</Header>
-        <i className="text-amethyst-smoke">Your note-taking syncer</i>
+        <i className="text-amethyst-smoke">
+          Bring org documents with you everywhere
+        </i>
       </div>
     </LogoWrapper>
 

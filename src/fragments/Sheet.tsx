@@ -16,6 +16,14 @@ export const Sheet = ({ children, show, onClose }: SheetProps) => (
   </BackDrop>
 );
 
+/** An action in a sheet */
+export const SheetRow = ({ className = "", ...rest }: React.ButtonHTMLAttributes<HTMLButtonElement>) => (
+  <button
+    className={`flex items-center gap-4 w-full px-3 py-3 rounded-lg text-left cursor-pointer active:bg-dusty-grape/40 ${className}`}
+    {...rest}
+  />
+);
+
 const Panel = tw.div<{ $show: boolean }>`
   ${(p) => (p.$show ? "translate-y-0" : "translate-y-full")}
   absolute

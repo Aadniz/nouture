@@ -6,9 +6,11 @@ import { Modal } from "../fragments/Modal";
 import { Page } from "../fragments/Page";
 import { NoteEntry, Notes } from "../plugins/notes";
 import { Profile } from "../plugins/unison";
+import { useNotesStore } from "../stores/notesStore";
 import { useUnisonStore } from "../stores/unisonStore";
 import { prettyDateTime } from "../utils/date";
 import { AccessBanner } from "./AccessBanner";
+import { NoteActions } from "./NoteActions";
 import { NoteRow, notePath } from "./RecentNotes";
 
 export const NoteBrowser = () => {
@@ -42,6 +44,9 @@ const ProfileFiles = ({ profile }: { profile: Profile }) => {
   const [entries, setEntries] = useState<NoteEntry[]>([]);
   const [open, setOpen] = useState<Set<string>>(new Set());
   const [creating, setCreating] = useState(false);
+  const [actionsFor, setActionsFor] = useState<string | null>(null);
+  const hidden = useNotesStore((s) => s.hidden);
+  const pinned = useNotesStore((s) => s.pinned);
 
   const load = useCallback(
     () => Notes.listDir({ path: root }).then((r) => setEntries(r.entries)),
@@ -79,7 +84,10 @@ const ProfileFiles = ({ profile }: { profile: Profile }) => {
             <NoteRow
               name={entry.name}
               detail={prettyDateTime(new Date(entry.mtime), "short")}
+              hidden={hidden.includes(entry.path)}
+              pinned={pinned.includes(entry.path)}
               onClick={() => navigate(notePath(entry.path))}
+              onHold={() => setActionsFor(entry.path)}
             />
           )}
         </div>
@@ -107,6 +115,7 @@ const ProfileFiles = ({ profile }: { profile: Profile }) => {
         onClose={() => setCreating(false)}
         onCreated={(path) => navigate(notePath(path))}
       />
+      <NoteActions path={actionsFor} onClose={() => setActionsFor(null)} onChanged={load} />
     </Wrapper>
   );
 };

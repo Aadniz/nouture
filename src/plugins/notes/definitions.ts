@@ -16,10 +16,16 @@ export interface NotePreview {
 }
 
 export interface NotesPlugin {
-  /** The most recently edited .org files under the roots, newest first. */
+  /**
+   * The front page: the pinned notes first, then the most recently edited
+   * .org files under the roots, newest first; never the hidden ones. `total`
+   * is how many it could show.
+   */
   recentNotes(options: {
     roots: string[];
     limit: number;
+    hidden?: string[];
+    pinned?: string[];
   }): Promise<{ notes: NotePreview[]; total: number }>;
   hasAllFilesAccess(): Promise<{ granted: boolean }>;
   /** Opens Android's "All files access" settings page for Nouture. */
@@ -42,4 +48,8 @@ export interface NotesPlugin {
     expectedHash?: string;
   }): Promise<{ conflict: boolean; hash: string }>;
   createFile(options: { path: string; text?: string }): Promise<NoteEntry>;
+  /** Deletes a file, never a folder. */
+  deleteFile(options: { path: string }): Promise<void>;
+  /** Renames a file within its folder. */
+  renameFile(options: { path: string; name: string }): Promise<NoteEntry>;
 }

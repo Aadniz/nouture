@@ -33,4 +33,12 @@ export class NotesWeb extends WebPlugin implements NotesPlugin {
   async createFile(): Promise<NoteEntry> {
     throw this.unimplemented("Not available on web");
   }
+
+  async deleteFile(): Promise<void> {
+    throw this.unimplemented("Not available on web");
+  }
+
+  async renameFile(): Promise<NoteEntry> {
+    throw this.unimplemented("Not available on web");
+  }
 }
