@@ -1,10 +1,12 @@
-import { MouseEvent } from "react";
+import { Fragment, MouseEvent, useEffect, useRef, useState } from "react";
 import { Icon } from "../icons/icon";
-import { Folds, cycle, isExpanded, isOpen, showsText, toggleOpen, visibilityOf } from "../org/folds";
+import { canShift, entryAt, subtreeEnd } from "../org/edit";
+import { Folds, Visibility, cycle, isExpanded, isOpen, showsText, toggleOpen, visibilityOf } from "../org/folds";
 import { Inline, parseInline } from "../org/inline";
 import { isDone, keywordKind } from "../org/keywords";
-import { Block, Headline, OrgDocument } from "../org/parse";
-import { useLongPress } from "../hooks/useLongPress";
+import { Block, Headline, OrgDocument, headlinePath } from "../org/parse";
+import { DragState, useDragMove } from "../hooks/useDragMove";
+import { Direction, SWIPE_PX, useRowGestures } from "../hooks/useRowGestures";
 import { KeywordLabel } from "./KeywordLabel";
 
 interface Context {
@@ -14,8 +16,30 @@ interface Context {
   onTodo: (headline: Headline) => void;
   /** Long press on a headline */
   onEntryHold: (headline: Headline) => void;
+  /** Swiping right demotes (1), left promotes (-1) */
+  onShift: (headline: Headline, delta: Direction) => void;
+  /** The headline whose title is being edited */
+  renaming: number | null;
+  /** The new title, or null to cancel */
+  onRename: (headline: Headline, title: string | null) => void;
+  /** The headline in move mode */
+  moving: number | null;
+  /** Dropping the moving entry before line `before`, at `level` */
+  onDrop: (before: number, level: number) => void;
+  /** The headline zoomed into */
+  zoom: Headline | null;
+  /** A breadcrumb: the headline to zoom to, null for the whole file */
+  onZoom: (line: number | null) => void;
+  /** The first breadcrumb */
+  fileTitle: string;
+  onAddEntry: () => void;
   onCheckbox: (line: number) => void;
   onOpenFile: (target: string) => void;
+}
+
+interface ViewContext extends Context {
+  dragging: boolean;
+  grip: ReturnType<typeof useDragMove>["grip"];
 }
 
 /** Headline colors by level, cycling like org-level-N faces */
@@ -26,66 +50,266 @@ export const LEVEL_COLORS = [
   "text-periwinkle",
 ];
 
-export const OrgView = (ctx: Context) => (
-  <div className="px-4 pb-8">
-    <Body blocks={ctx.doc.body} ctx={ctx} />
-    {ctx.doc.headlines.map((h) => (
-      <HeadlineView key={h.line} headline={h} ctx={ctx} />
-    ))}
-  </div>
-);
+export const OrgView = (props: Context) => {
+  const container = useRef<HTMLDivElement>(null);
+  const root = props.zoom;
+  const moving = props.moving !== null ? entryAt(props.doc, props.moving)?.headline ?? null : null;
+  const drag = useDragMove({
+    container,
+    line: moving?.line ?? null,
+    level: moving?.level ?? 1,
+    zoomLevel: root?.level ?? 0,
+    endLine: root ? subtreeEnd(props.doc, root) : props.doc.lines.length,
+    onDrop: props.onDrop,
+  });
+  const ctx: ViewContext = { ...props, dragging: drag.dragging, grip: drag.grip };
 
-const HeadlineView = ({ headline: h, ctx }: { headline: Headline; ctx: Context }) => {
-  const visibility = visibilityOf(ctx.folds, h);
-  const foldable = h.children.length > 0 || h.body.some((b) => b.kind !== "blank");
+  return (
+    <div className="px-4 pb-24" ref={container}>
+      {root ? (
+        <>
+          <Breadcrumbs root={root} ctx={ctx} />
+          <HeadlineView headline={root} ctx={ctx} root />
+        </>
+      ) : (
+        <>
+          <Body blocks={props.doc.body} ctx={ctx} />
+          {props.doc.headlines.map((h) => (
+            <HeadlineView key={h.line} headline={h} ctx={ctx} />
+          ))}
+        </>
+      )}
+      <button
+        className="flex items-center gap-2 mt-3 py-2 text-sm text-lavender-grey cursor-pointer active:text-navajo-white"
+        onClick={props.onAddEntry}
+      >
+        <Icon title="plus_lg" />
+        New entry
+      </button>
+      {moving && <DragOverlay subscribe={drag.subscribe} headline={moving} doc={props.doc} />}
+    </div>
+  );
+};
+
+const HeadlineView = ({ headline: h, ctx, root = false }: { headline: Headline; ctx: ViewContext; root?: boolean }) => {
+  const isMoving = ctx.moving === h.line;
+  const renaming = ctx.renaming === h.line;
+  // The zoom root always shows what's below it; an entry being dragged doesn't
+  const visibility: Visibility = root
+    ? "subtree"
+    : isMoving && ctx.dragging
+      ? "folded"
+      : visibilityOf(ctx.folds, h);
+  const foldable = !root && (h.children.length > 0 || h.body.some((b) => b.kind !== "blank"));
   const done = !!h.keyword && isDone(ctx.doc.sequences, h.keyword);
   const color = done ? "text-lavender-grey/50" : LEVEL_COLORS[(h.level - 1) % LEVEL_COLORS.length];
   const toggle = () => foldable && ctx.onFolds(cycle(ctx.folds, h));
-  const hold = useLongPress(() => ctx.onEntryHold(h));
+  const allowed = (direction: Direction) => !root && canShift(ctx.doc, h.line, direction);
+  const gestures = useRowGestures({
+    onHold: () => ctx.onEntryHold(h),
+    onSwipe: root ? undefined : (direction) => ctx.onShift(h, direction),
+    canSwipe: allowed,
+  });
+
+  // Moved by the arrows or a drop: keep it in sight
+  const row = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (isMoving && !ctx.dragging) row.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }, [isMoving]);
+
+  const keyword = h.keyword && (
+    <KeywordLabel
+      className="mr-2 align-[0.1em]"
+      keyword={h.keyword}
+      kind={keywordKind(ctx.doc.sequences, h.keyword)}
+      onClick={(e) => {
+        e.stopPropagation();
+        ctx.onTodo(h);
+      }}
+    />
+  );
+  const priority = h.priority && (
+    <span className={`mr-2 ${done ? "text-dusty-rose/50" : "text-dusty-rose"}`}>[#{h.priority}]</span>
+  );
+  const size = root ? "text-2xl" : h.level === 1 ? "text-lg" : "";
 
   return (
-    <div className={h.level > 1 ? "pl-3" : ""}>
-      <div
-        className={`flex items-start gap-1 py-1 -mx-1 px-1 rounded-md cursor-pointer select-none [-webkit-touch-callout:none] transition-colors ${
-          hold.pressing ? "bg-dusty-grape/40 duration-500" : "duration-150"
-        }`}
-        onClick={toggle}
-        {...hold.handlers}
-      >
-        <span className="text-lavender-grey w-4 pt-1 shrink-0">
-          {foldable && (
-            <Icon title={isExpanded(ctx.folds, h) ? "chevron_down" : "chevron_right"} />
+    <div className={h.level > 1 && !root ? "pl-3" : ""}>
+      <div className={`relative -mx-1 overflow-x-clip rounded-md ${root ? "py-2" : ""}`}>
+        {Math.abs(gestures.dx) > 16 && <SwipeHint dx={gestures.dx} allowed={allowed(gestures.dx > 0 ? 1 : -1)} />}
+        <div
+          ref={row}
+          data-headline={root ? undefined : h.line}
+          data-level={h.level}
+          className={`flex items-start gap-1 py-1 px-1 rounded-md cursor-pointer select-none [-webkit-touch-callout:none] touch-pan-y transition-[background-color,transform,opacity] ${
+            gestures.pressing
+              ? "bg-dusty-grape/40 duration-500"
+              : isMoving
+                ? `bg-dusty-grape/60 duration-150 ${ctx.dragging ? "opacity-50" : ""}`
+                : "duration-150"
+          }`}
+          style={gestures.dx ? { transform: `translateX(${gestures.dx}px)`, transitionDuration: "0ms" } : undefined}
+          onClick={renaming ? undefined : toggle}
+          {...(renaming ? {} : gestures.handlers)}
+        >
+          {!root && (
+            <span className="text-lavender-grey w-4 pt-1 shrink-0">
+              {foldable && <Icon title={isExpanded(ctx.folds, h) ? "chevron_down" : "chevron_right"} />}
+            </span>
           )}
-        </span>
-        <div className={`flex-1 font-bold wrap-break-word ${h.level === 1 ? "text-lg" : ""} ${color}`}>
-          {h.keyword && (
-            <KeywordLabel
-              className="mr-2 align-[0.1em]"
-              keyword={h.keyword}
-              kind={keywordKind(ctx.doc.sequences, h.keyword)}
-              onClick={(e) => {
-                e.stopPropagation();
-                ctx.onTodo(h);
-              }}
-            />
+          {renaming ? (
+            <div className={`flex-1 flex items-start font-bold ${size} ${color}`}>
+              {keyword}
+              {priority}
+              <TitleField initial={h.title} onDone={(title) => ctx.onRename(h, title)} />
+            </div>
+          ) : (
+            <div className={`flex-1 font-bold wrap-break-word ${size} ${root ? "text-navajo-white" : color}`}>
+              {keyword}
+              {priority}
+              <InlineText text={h.title} onOpenFile={ctx.onOpenFile} />
+            </div>
           )}
-          {h.priority && (
-            <span className={`mr-2 ${done ? "text-dusty-rose/50" : "text-dusty-rose"}`}>[#{h.priority}]</span>
+          {h.tags.length > 0 && (
+            <span className="text-xs text-lavender-grey pt-1">:{h.tags.join(":")}:</span>
           )}
-          <InlineText text={h.title} onOpenFile={ctx.onOpenFile} />
+          {isMoving && !renaming && (
+            <span
+              className="text-navajo-white -my-1 px-2 py-2 touch-none cursor-grab"
+              title="Drag to move"
+              {...ctx.grip}
+            >
+              <Icon title="grip_vertical" width={18} height={18} />
+            </span>
+          )}
         </div>
-        {h.tags.length > 0 && (
-          <span className="text-xs text-lavender-grey pt-1">:{h.tags.join(":")}:</span>
-        )}
       </div>
       {showsText(visibility) && (
-        <div className="pl-5">
+        <div className={root ? "" : "pl-5"}>
           <Body blocks={h.body} ctx={ctx} />
         </div>
       )}
       {visibility !== "folded" &&
         h.children.map((c) => <HeadlineView key={c.line} headline={c} ctx={ctx} />)}
     </div>
+  );
+};
+
+/** Shows behind a row being swiped what letting go does */
+const SwipeHint = ({ dx, allowed }: { dx: number; allowed: boolean }) => (
+  <div
+    className={`absolute inset-y-0 flex items-center px-2 ${dx > 0 ? "left-0" : "right-0"} ${
+      !allowed ? "text-lavender-grey/30" : Math.abs(dx) >= SWIPE_PX ? "text-navajo-white" : "text-lavender-grey"
+    }`}
+  >
+    <Icon title={dx > 0 ? "indent" : "unindent"} width={18} height={18} />
+  </div>
+);
+
+/** Editing a title in place: Enter or leaving the field saves, Escape cancels */
+const TitleField = ({ initial, onDone }: { initial: string; onDone: (title: string | null) => void }) => {
+  const field = useRef<HTMLTextAreaElement>(null);
+  const finished = useRef(false);
+  const finish = (title: string | null) => {
+    if (finished.current) return;
+    finished.current = true;
+    onDone(title);
+  };
+  const fit = () => {
+    const el = field.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+  };
+  useEffect(() => {
+    const el = field.current;
+    if (!el) return;
+    fit();
+    el.focus();
+    el.setSelectionRange(el.value.length, el.value.length);
+    el.scrollIntoView({ block: "center" });
+  }, []);
+
+  return (
+    <textarea
+      ref={field}
+      defaultValue={initial}
+      rows={1}
+      enterKeyHint="done"
+      placeholder="Title"
+      className="flex-1 min-w-0 resize-none bg-jet-black rounded px-1 outline-none select-text placeholder:text-lavender-grey/60"
+      onInput={fit}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          finish(e.currentTarget.value);
+        } else if (e.key === "Escape") {
+          finish(null);
+        }
+      }}
+      onBlur={(e) => finish(e.currentTarget.value)}
+    />
+  );
+};
+
+/** Zoomed in: the way back up, each step tappable */
+const Breadcrumbs = ({ root, ctx }: { root: Headline; ctx: ViewContext }) => (
+  <nav className="flex flex-wrap items-center gap-x-1 text-sm text-lavender-grey pt-1">
+    <Crumb onClick={() => ctx.onZoom(null)}>{ctx.fileTitle}</Crumb>
+    {headlinePath(ctx.doc.headlines, root.line)
+      .slice(0, -1)
+      .map((h) => (
+        <Fragment key={h.line}>
+          <Icon title="chevron_right" width={10} height={10} />
+          <Crumb onClick={() => ctx.onZoom(h.line)}>
+            <InlineText text={h.title} />
+          </Crumb>
+        </Fragment>
+      ))}
+  </nav>
+);
+
+const Crumb = ({ children, onClick }: { children: React.ReactNode; onClick: () => void }) => (
+  <button className="truncate max-w-[45vw] py-1 cursor-pointer active:text-navajo-white" onClick={onClick}>
+    {children}
+  </button>
+);
+
+/** While dragging: where the entry would land, and the entry under the finger */
+const DragOverlay = ({
+  subscribe,
+  headline,
+  doc,
+}: {
+  subscribe: ReturnType<typeof useDragMove>["subscribe"];
+  headline: Headline;
+  doc: OrgDocument;
+}) => {
+  const [state, setState] = useState<DragState | null>(null);
+  useEffect(() => subscribe(setState), [subscribe]);
+  if (!state) return null;
+  return (
+    <>
+      <div
+        className="fixed h-0.5 bg-navajo-white rounded-full pointer-events-none z-5"
+        style={{ top: state.lineY - 1, left: state.lineX, right: 16 }}
+      >
+        <div className="absolute -left-1 -top-0.75 w-2 h-2 rounded-full bg-navajo-white" />
+      </div>
+      <div
+        className="fixed max-w-[70vw] truncate rounded-lg bg-dusty-grape shadow-lg px-3 py-1 font-bold text-navajo-white pointer-events-none z-5"
+        style={{ top: state.y - 56, left: state.lineX }}
+      >
+        {headline.keyword && (
+          <KeywordLabel
+            className="mr-2"
+            keyword={headline.keyword}
+            kind={keywordKind(doc.sequences, headline.keyword)}
+          />
+        )}
+        {headline.title}
+      </div>
+    </>
   );
 };
 

@@ -241,6 +241,34 @@ const findEnd = (
 
 const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
+/** Tags used in the file and offered by #+TAGS / #+FILETAGS, sorted. */
+export const knownTags = (doc: OrgDocument): string[] => {
+  const declared = doc.lines.flatMap((line) => {
+    const match = /^\s*#\+(?:FILE)?TAGS:\s*(.*)$/i.exec(line);
+    // "work(w) { @home @office }", ":a:b:"
+    return match ? match[1].split(/[\s:{}]+/).map((tag) => tag.replace(/\(.*\)$/, "")) : [];
+  });
+  const used = flatten(doc.headlines).flatMap((h) => h.tags);
+  return [...new Set([...declared, ...used])]
+    .filter((tag) => /^[\w@#%]+$/.test(tag))
+    .sort((a, b) => a.localeCompare(b));
+};
+
+/** The priorities from highest to lowest: #+PRIORITIES or Org's A to C. */
+export const priorities = (doc: OrgDocument): string[] => {
+  const line = doc.lines.find((l) => /^\s*#\+PRIORITIES:/i.test(l));
+  const [high, low] = line?.replace(/^\s*#\+PRIORITIES:/i, "").trim().split(/\s+/) ?? [];
+  const range = (from: string, to: string) =>
+    Array.from({ length: to.charCodeAt(0) - from.charCodeAt(0) + 1 }, (_, i) =>
+      String.fromCharCode(from.charCodeAt(0) + i)
+    );
+  if (high && low && /^[A-Z]$/.test(high) && /^[A-Z]$/.test(low) && high <= low) return range(high, low);
+  if (high && low && /^\d$/.test(high) && /^\d$/.test(low) && Number(high) <= Number(low)) {
+    return Array.from({ length: Number(low) - Number(high) + 1 }, (_, i) => String(Number(high) + i));
+  }
+  return range("A", "C");
+};
+
 /** Every headline in document order. */
 export const flatten = (headlines: Headline[]): Headline[] =>
   headlines.flatMap((h) => [h, ...flatten(h.children)]);

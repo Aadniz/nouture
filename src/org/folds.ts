@@ -1,5 +1,6 @@
+import type { LineMap } from "./edit";
 import { isDone } from "./keywords";
-import { Headline, OrgDocument, flatten } from "./parse";
+import { Headline, OrgDocument, flatten, headlinePath } from "./parse";
 
 /**
  * What shows below a headline:
@@ -143,16 +144,28 @@ export const toggleOpen = (folds: Folds, line: number, kind: "drawer" | "block")
   open: { ...folds.open, [line]: !isOpen(folds, line, kind) },
 });
 
-/** After deleting `count` lines from `start`: forget those, move the rest up. */
-export const removeLines = (folds: Folds, start: number, count: number): Folds => {
-  const shift = <T,>(byLine: Record<number, T>) =>
+/** After an edit: folds follow their lines, and those of removed lines go. */
+export const remapFolds = (folds: Folds, map: LineMap): Folds => {
+  const remap = <T,>(byLine: Record<number, T>) =>
     Object.fromEntries(
       Object.entries(byLine).flatMap(([key, value]) => {
-        const line = Number(key);
-        if (line < start) return [[line, value]];
-        if (line < start + count) return [];
-        return [[line - count, value]];
+        const line = map(Number(key));
+        return line === null ? [] : [[line, value]];
       })
     ) as Record<number, T>;
-  return { ...folds, headlines: shift(folds.headlines), open: shift(folds.open) };
+  return { ...folds, headlines: remap(folds.headlines), open: remap(folds.open) };
+};
+
+/**
+ * Makes the headline at `line` show, with what's below it if `self`: folded
+ * ancestors (and itself) open to CHILDREN.
+ */
+export const unfold = (folds: Folds, doc: OrgDocument, line: number, self = false): Folds => {
+  const path = headlinePath(doc.headlines, line);
+  const opening = self ? path : path.slice(0, -1);
+  const headlines = { ...folds.headlines };
+  for (const h of opening) {
+    if (headlines[h.line] === "folded") headlines[h.line] = "children";
+  }
+  return { ...folds, headlines };
 };

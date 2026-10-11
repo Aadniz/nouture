@@ -1,9 +1,22 @@
 import { describe, expect, it } from "vitest";
-import { deleteEntry, setTodo, toggleCheckbox } from "./edit";
+import {
+  addEntry,
+  appendEntry,
+  canShift,
+  deleteEntry,
+  moveSubtree,
+  moveSubtreeTo,
+  setPriority,
+  setTags,
+  setTitle,
+  setTodo,
+  shiftSubtree,
+  toggleCheckbox,
+} from "./edit";
 import { parseInline } from "./inline";
 import { DOOM_SEQUENCES, keywordKind, pickerGroups, todoSequences } from "./keywords";
-import { flatten, parse, serialize } from "./parse";
-import { cycle, initialFolds, isExpanded, removeLines, visibilityOf } from "./folds";
+import { flatten, knownTags, parse, priorities, serialize } from "./parse";
+import { cycle, initialFolds, isExpanded, remapFolds, unfold, visibilityOf } from "./folds";
 import { snippet } from "./snippet";
 
 const NOTES = `#+TITLE: Tasks
@@ -254,14 +267,15 @@ describe("deleteEntry", () => {
   });
 
   it("ignores lines that aren't headlines", () => {
-    expect(deleteEntry(NOTES, lineOf(NOTES, "- [X] Lamp"))).toEqual({ text: NOTES, removed: 0 });
+    expect(deleteEntry(NOTES, lineOf(NOTES, "- [X] Lamp"))).toMatchObject({ text: NOTES, removed: 0 });
   });
 });
 
-describe("removeLines", () => {
+describe("remapFolds", () => {
   it("forgets the deleted lines' folds and moves the rest up", () => {
     const folds = { headlines: { 0: "subtree", 2: "folded", 5: "children" }, open: { 3: true, 7: false }, hideBlocks: false, hideDrawers: true } as const;
-    expect(removeLines({ ...folds, headlines: { ...folds.headlines }, open: { ...folds.open } }, 2, 2)).toEqual({
+    const { map } = deleteEntry("* a\n** b\n* c\ntext\n* d\n* e\n* f\n* g\n", 2);
+    expect(remapFolds({ ...folds, headlines: { ...folds.headlines }, open: { ...folds.open } }, map)).toEqual({
       headlines: { 0: "subtree", 3: "children" },
       open: { 5: false },
       hideBlocks: false,
@@ -368,5 +382,190 @@ describe("cycle", () => {
     expect(visibilityOf(folds, h("Grandchild"))).toBe("subtree");
     folds = cycle(folds, h("Top"));
     expect(visibilityOf(folds, h("Top"))).toBe("folded");
+  });
+});
+
+const TAGGED = "* Tagged" + " ".repeat(52) + ":work:";
+const TREE = `* Projects [1/2]
+** TODO Alpha
+alpha text
+
+** DONE Beta
+*** Beta child
+beta text
+
+** Gamma
+* Inbox
+** TODO [#B] Call mom :phone:family:
+${TAGGED}
+`;
+
+const linesOf = (text: string) => text.split("\n");
+
+describe("moveSubtree", () => {
+  it("swaps with the next sibling, keeping the blank lines between in place", () => {
+    const { text, map } = moveSubtree(TREE, lineOf(TREE, "Alpha"), "down");
+    expect(linesOf(text).slice(0, 9)).toEqual([
+      "* Projects [1/2]",
+      "** DONE Beta",
+      "*** Beta child",
+      "beta text",
+      "",
+      "** TODO Alpha",
+      "alpha text",
+      "",
+      "** Gamma",
+    ]);
+    expect(map(lineOf(TREE, "Alpha"))).toBe(5);
+    expect(map(lineOf(TREE, "Beta child"))).toBe(2);
+    expect(moveSubtree(text, 5, "up").text).toBe(TREE);
+  });
+
+  it("does nothing without a sibling to swap with", () => {
+    expect(moveSubtree(TREE, lineOf(TREE, "Alpha"), "up").text).toBe(TREE);
+    expect(moveSubtree(TREE, lineOf(TREE, "Gamma"), "down").text).toBe(TREE);
+    expect(moveSubtree(TREE, lineOf(TREE, "alpha text"), "down").text).toBe(TREE);
+  });
+
+  it("keeps line endings and how the file ends", () => {
+    expect(moveSubtree("* a\n* b", 1, "up").text).toBe("* b\n* a");
+    expect(moveSubtree("* a\r\n* b\r\n", 0, "down").text).toBe("* b\r\n* a\r\n");
+  });
+});
+
+describe("shiftSubtree", () => {
+  it("demotes under the previous sibling, with its children, and fixes the cookie", () => {
+    const lines = linesOf(shiftSubtree(TREE, lineOf(TREE, "Beta"), 1));
+    expect(lines[lineOf(TREE, "Beta")]).toBe("*** DONE Beta");
+    expect(lines[lineOf(TREE, "Beta child")]).toBe("**** Beta child");
+    expect(lines[0]).toBe("* Projects [0/1]");
+  });
+
+  it("promotes in place, taking the siblings below in, like Emacs", () => {
+    const text = shiftSubtree(TREE, lineOf(TREE, "Alpha"), -1);
+    expect(linesOf(text)[lineOf(TREE, "Alpha")]).toBe("* TODO Alpha");
+    expect(linesOf(text)[0]).toBe("* Projects [0/0]");
+    const alpha = parse(text).headlines.find((h) => h.title === "Alpha")!;
+    expect(alpha.children.map((c) => c.title)).toEqual(["Beta", "Gamma"]);
+  });
+
+  it("can't promote the top level or demote without a previous sibling", () => {
+    const doc = parse(TREE);
+    expect(canShift(doc, 0, -1)).toBe(false);
+    expect(canShift(doc, lineOf(TREE, "Alpha"), 1)).toBe(false);
+    expect(canShift(doc, lineOf(TREE, "Beta"), 1)).toBe(true);
+    expect(shiftSubtree(TREE, lineOf(TREE, "Alpha"), 1)).toBe(TREE);
+    expect(shiftSubtree(TREE, 0, -1)).toBe(TREE);
+  });
+});
+
+describe("moveSubtreeTo", () => {
+  it("moves a subtree under another parent and fixes both cookies", () => {
+    const from = lineOf(TREE, "Call mom");
+    const { text, map } = moveSubtreeTo(TREE, from, lineOf(TREE, "Gamma"), 2);
+    const lines = linesOf(text);
+    expect(lines[lineOf(TREE, "Gamma")]).toBe("** TODO [#B] Call mom :phone:family:");
+    expect(lines[0]).toBe("* Projects [1/3]");
+    expect(map(from)).toBe(lineOf(TREE, "Gamma"));
+    expect(map(lineOf(TREE, "Gamma"))).toBe(lineOf(TREE, "Gamma") + 1);
+  });
+
+  it("re-levels the whole subtree and takes its blank lines along", () => {
+    const { text } = moveSubtreeTo(TREE, lineOf(TREE, "Beta"), linesOf(TREE).length - 1, 1);
+    expect(text.endsWith(`${TAGGED}\n* DONE Beta\n** Beta child\nbeta text\n\n`)).toBe(true);
+    expect(linesOf(text)[0]).toBe("* Projects [0/1]");
+  });
+
+  it("only changes the level when dropped where it is", () => {
+    const gamma = lineOf(TREE, "Gamma");
+    const { text, map } = moveSubtreeTo(TREE, gamma, gamma + 1, 1);
+    expect(linesOf(text)[gamma]).toBe("* Gamma");
+    expect(map(gamma)).toBe(gamma);
+    expect(moveSubtreeTo(TREE, gamma, gamma, 2).text).toBe(TREE);
+  });
+});
+
+describe("addEntry", () => {
+  it("adds a sibling after the subtree with the first open state, set apart like the entry", () => {
+    const alpha = lineOf(TREE, "Alpha");
+    const { text, line, map } = addEntry(TREE, alpha, false);
+    const lines = linesOf(text);
+    expect(line).toBe(lineOf(TREE, "Beta"));
+    expect(lines.slice(alpha, line + 3)).toEqual(["** TODO Alpha", "alpha text", "", "** TODO", "", "** DONE Beta"]);
+    expect(lines[0]).toBe("* Projects [1/3]");
+    expect(map(lineOf(TREE, "Beta"))).toBe(line + 2);
+  });
+
+  it("adds a last child without a keyword when the entry has none", () => {
+    const gamma = lineOf(TREE, "Gamma");
+    const { text, line } = addEntry(TREE, gamma, true);
+    expect(line).toBe(gamma + 1);
+    expect(linesOf(text)[line]).toBe("*** ");
+    expect(addEntry("* [ ] a", 0, false).text).toBe("* [ ] a\n* [ ]");
+  });
+
+  it("appends a first headline to a file", () => {
+    expect(appendEntry("")).toMatchObject({ text: "* \n", line: 0 });
+    expect(appendEntry("#+TITLE: x").text).toBe("#+TITLE: x\n* ");
+  });
+});
+
+describe("setTitle, setPriority, setTags", () => {
+  const mom = lineOf(TREE, "Call mom");
+
+  it("rewrites only the part asked for", () => {
+    expect(linesOf(setTitle(TREE, mom, "Call\ndad "))[mom]).toBe("** TODO [#B] Call dad :phone:family:");
+    expect(linesOf(setPriority(TREE, mom, null))[mom]).toBe("** TODO Call mom :phone:family:");
+    expect(linesOf(setPriority(TREE, lineOf(TREE, "Alpha"), "A"))[1]).toBe("** TODO [#A] Alpha");
+    expect(linesOf(setTags(TREE, mom, []))[mom]).toBe("** TODO [#B] Call mom");
+    expect(linesOf(setTags(TREE, lineOf(TREE, "Gamma"), ["x"]))[lineOf(TREE, "Gamma")]).toBe("** Gamma :x:");
+    expect(changedLines(TREE, setTitle(TREE, mom, "Call dad"))).toHaveLength(1);
+  });
+
+  it("keeps aligned tags ending at their column", () => {
+    const tagged = lineOf(TREE, "Tagged");
+    const tags = linesOf(setTags(TREE, tagged, ["work", "home"]))[tagged];
+    expect(tags.length).toBe(TAGGED.length);
+    expect(tags.endsWith(" :work:home:")).toBe(true);
+    const title = linesOf(setTitle(TREE, tagged, "Short"))[tagged];
+    expect(title).toMatch(/^\* Short {2,}:work:$/);
+    expect(title.length).toBe(TAGGED.length);
+  });
+
+  it("leaves the text alone when nothing changes", () => {
+    expect(setPriority(TREE, mom, "B")).toBe(TREE);
+    expect(setTags(TREE, mom, ["phone", "family"])).toBe(TREE);
+    expect(setTitle(TREE, lineOf(TREE, "alpha text"), "x")).toBe(TREE);
+  });
+});
+
+describe("knownTags and priorities", () => {
+  it("collects used and declared tags", () => {
+    expect(knownTags(parse(`#+TAGS: home(h) { @a @b }\n#+FILETAGS: :x:\n${TREE}`))).toEqual([
+      "@a",
+      "@b",
+      "family",
+      "home",
+      "phone",
+      "work",
+      "x",
+    ]);
+  });
+
+  it("reads #+PRIORITIES, defaulting to A-C", () => {
+    expect(priorities(parse(TREE))).toEqual(["A", "B", "C"]);
+    expect(priorities(parse("#+PRIORITIES: A E C"))).toEqual(["A", "B", "C", "D", "E"]);
+    expect(priorities(parse("#+PRIORITIES: 1 3 2"))).toEqual(["1", "2", "3"]);
+  });
+});
+
+describe("unfold", () => {
+  it("opens the folded ancestors, and the headline itself when asked", () => {
+    const doc = parse(TREE);
+    const beta = lineOf(TREE, "Beta");
+    const folds = { ...initialFolds(doc), headlines: { 0: "folded", [beta]: "folded" } } as ReturnType<typeof initialFolds>;
+    expect(unfold(folds, doc, beta + 1).headlines).toMatchObject({ 0: "children", [beta]: "children" });
+    expect(unfold(folds, doc, beta).headlines).toMatchObject({ 0: "children", [beta]: "folded" });
+    expect(unfold(folds, doc, beta, true).headlines[beta]).toBe("children");
   });
 });
