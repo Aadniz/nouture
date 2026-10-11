@@ -14,6 +14,7 @@ import { Modal } from "../fragments/Modal";
 import { IconButton } from "../fragments/Page";
 import { Icon } from "../icons/icon";
 import { SshFile, SshKey, Unison } from "../plugins/unison";
+import { useUnisonStore } from "../stores/unisonStore";
 
 const CONFIG_PLACEHOLDER = `Host myserver
   HostName example.com
@@ -23,16 +24,16 @@ const CONFIG_PLACEHOLDER = `Host myserver
 type KeyModal = "generate" | "import" | null;
 
 export const SshSettings = () => {
-  const [keys, setKeys] = useState<SshKey[]>([]);
+  // Shared: the profiles above can't sync over SSH without a key
+  const keys = useUnisonStore((s) => s.keys);
+  const refresh = useUnisonStore((s) => s.refreshKeys);
   const [file, setFile] = useState<SshFile | null>(null);
   const [keyModal, setKeyModal] = useState<KeyModal>(null);
   const [copied, setCopied] = useState<string | null>(null);
 
-  const refresh = () => Unison.listKeys().then((k) => setKeys(k.keys));
-
   useEffect(() => {
     refresh();
-  }, []);
+  }, [refresh]);
 
   const copy = async (key: SshKey) => {
     await navigator.clipboard.writeText(key.publicKey);

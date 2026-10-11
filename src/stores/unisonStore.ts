@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { Profile, Unison } from "../plugins/unison";
+import { Profile, SshKey, SyncResult, Unison } from "../plugins/unison";
 
 const MAX_OUTPUT_LINES = 500;
 
@@ -8,8 +8,11 @@ interface UnisonState {
   error: string | null;
   /** Live output of each profile's current (or last) run */
   output: Record<string, string[]>;
+  /** The keys in ~/.ssh: a profile syncing over SSH needs one */
+  keys: SshKey[];
 
   refresh: () => Promise<void>;
+  refreshKeys: () => Promise<void>;
   saveProfile: (name: string, text: string) => Promise<void>;
   deleteProfile: (name: string) => Promise<void>;
   setAutoSync: (name: string, enabled: boolean) => Promise<void>;
@@ -22,6 +25,7 @@ export const useUnisonStore = create<UnisonState>()((set, get) => ({
   profiles: [],
   error: null,
   output: {},
+  keys: [],
 
   refresh: async () => {
     try {
@@ -30,6 +34,11 @@ export const useUnisonStore = create<UnisonState>()((set, get) => ({
     } catch (error) {
       set({ error: errorMessage(error) });
     }
+  },
+
+  refreshKeys: async () => {
+    const { keys } = await Unison.listKeys();
+    set({ keys });
   },
 
   saveProfile: async (name, text) => {
@@ -48,6 +57,7 @@ export const useUnisonStore = create<UnisonState>()((set, get) => ({
   },
 
   sync: async (name, reason = "manual") => {
+    set({ error: null });
     try {
       await Unison.sync({ name, reason });
     } catch (error) {
@@ -60,6 +70,10 @@ export const useUnisonStore = create<UnisonState>()((set, get) => ({
     if (profile?.autoSync) get().sync(profile.name, reason);
   },
 }));
+
+/** Unison got through the run: everything not skipped or failed is in sync */
+export const completed = (result: SyncResult) =>
+  !!result.summary && result.exitCode >= 0 && result.exitCode <= 2;
 
 export const profileForPath = (profiles: Profile[], path: string) =>
   profiles.find(
@@ -101,5 +115,9 @@ Unison.addListener("syncOutput", ({ profile, line }) => {
 });
 
 Unison.addListener("syncFinished", (result) => {
-  updateProfile(result.profile, { running: false, lastResult: result });
+  updateProfile(result.profile, {
+    running: false,
+    lastResult: result,
+    ...(completed(result) ? { lastSyncedAt: result.finishedAt } : {}),
+  });
 });

@@ -278,6 +278,7 @@ class UnisonPlugin : Plugin() {
         .put("autoSync", SyncState.isAutoSync(name))
         .put("running", UnisonRunner.isRunning(name))
         .put("lastResult", SyncState.lastResult(name)?.let { JSObject.fromJSONObject(it) } ?: JSONObject.NULL)
+        .put("lastSyncedAt", SyncState.lastSyncedAt(name) ?: JSONObject.NULL)
 
     /** Text if it decodes as UTF-8 without NUL bytes; otherwise treated as binary */
     private fun sideJson(side: Conflicts.Side): JSObject {

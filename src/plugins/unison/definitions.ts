@@ -18,6 +18,8 @@ export interface SyncResult {
   changed: string[];
   error?: string;
   untrustedHost: boolean;
+  /** The server's key, when the sync stopped because it isn't trusted yet */
+  unknownHostKey?: HostKey;
   output: string[];
 }
 
@@ -28,6 +30,8 @@ export interface Profile {
   autoSync: boolean;
   running: boolean;
   lastResult: SyncResult | null;
+  /** The last sync that got all the way through; a failed one doesn't count */
+  lastSyncedAt: number | null;
 }
 
 export interface SshKey {

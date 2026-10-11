@@ -45,13 +45,27 @@ object SyncState {
     @Synchronized
     fun saveResult(result: SyncResult) {
         section("results").put(result.profile, result.toJson())
+        if (result.completed) section("synced").put(result.profile, result.finishedAt)
         save()
+    }
+
+    /**
+     * When the profile last synced all the way: a failed run doesn't count.
+     * Results saved before this was kept count when they completed.
+     */
+    @Synchronized
+    fun lastSyncedAt(profile: String): Long? {
+        section("synced").optLong(profile, 0L).takeIf { it > 0 }?.let { return it }
+        val last = lastResult(profile) ?: return null
+        val completed = !last.isNull("summary") && last.optInt("exitCode", -1) in 0..2
+        return if (completed) last.optLong("finishedAt") else null
     }
 
     @Synchronized
     fun forget(profile: String) {
         section("autoSync").remove(profile)
         section("results").remove(profile)
+        section("synced").remove(profile)
         save()
     }
 }

@@ -44,6 +44,14 @@ data class SyncResult(
         put("changed", JSONArray(changed))
         put("error", error)
         put("untrustedHost", untrustedHost != null)
+        // So the app can ask about the key right away, without connecting again
+        put("unknownHostKey", untrustedHost?.let {
+            JSONObject()
+                .put("host", it.hostKey.host)
+                .put("type", it.hostKey.type)
+                .put("key", it.hostKey.key)
+                .put("fingerprint", it.fingerprint)
+        })
         put("output", JSONArray(output.takeLast(MAX_STORED_LINES)))
     }
 
