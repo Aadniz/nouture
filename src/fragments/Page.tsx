@@ -36,7 +36,12 @@ export const Page = ({ title, actions, children, fill }: PageProps) => {
   );
 };
 
+/** An icon-only button: compact, with the icon centered */
 export const IconButton = tw(Button)`
+  p-2
+  inline-flex
+  items-center
+  justify-center
   text-white/80
   hover:text-white/70
   active:text-lavender-grey

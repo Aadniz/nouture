@@ -76,7 +76,7 @@ export const isBoxKeyword = (keyword: string) => /^\[.\]$/.test(keyword);
 
 /**
  * The states offered for a headline: first those of the same style as its
- * current one (done states, then open ones), then the rest.
+ * current one (open states, then done ones), then the rest.
  */
 export const pickerGroups = (sequences: TodoSequence[], current: string | null) => {
   const box = current !== null && isBoxKeyword(current);

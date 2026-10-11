@@ -166,17 +166,16 @@ const ProfileCard = ({
           </div>
         </div>
         <IconButton
-          className="px-2"
           onClick={onTest}
           disabled={test?.testing}
           title="Test connection"
         >
           <Icon title={test?.testing ? "arrow_repeat" : "reception_4"} />
         </IconButton>
-        <IconButton className="px-2" onClick={onLog} title="Show logs">
+        <IconButton onClick={onLog} title="Show logs">
           <Icon title="terminal" />
         </IconButton>
-        <IconButton className="px-2" onClick={onEdit} title="Edit profile">
+        <IconButton onClick={onEdit} title="Edit profile">
           <Icon title="gear_wide_connected" />
         </IconButton>
       </div>

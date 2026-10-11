@@ -1,5 +1,6 @@
 import tw from "tailwind-styled-components";
 import { ButtonHTMLAttributes, ReactNode } from "react";
+import { twMerge } from "tailwind-merge";
 
 /** The app's two button looks: Save/Add (primary) and Close (secondary) */
 export const PRIMARY =
@@ -15,10 +16,12 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 
 export const Button = ({ children, className, ...rest }: ButtonProps) => {
   const baseClasses =
-    "font-bold rounded-lg p-2 transition-colors cursor-pointer";
+    "font-bold rounded-lg py-2 px-4 transition-colors cursor-pointer";
 
+  // twMerge drops base classes that `className` overrides: in the CSS itself,
+  // whichever rule comes later in the stylesheet wins, not the later class
   return (
-    <button className={`${baseClasses} ${className || ""}`} {...rest}>
+    <button className={twMerge(baseClasses, className)} {...rest}>
       {children}
     </button>
   );

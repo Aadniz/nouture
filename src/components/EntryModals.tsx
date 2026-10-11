@@ -15,8 +15,8 @@ const useLast = <T,>(value: T | null) => {
 };
 
 /**
- * org-todo: the states of the headline's own kind first (done ones, then
- * open ones), the others below.
+ * org-todo: the states of the headline's own kind first (open ones, then
+ * done ones), the others below.
  */
 export const StatePicker = ({
   headline,
@@ -63,15 +63,14 @@ export const StatePicker = ({
       saveLabel="Clear state"
     >
       <Column className="w-[70vw] gap-3">
-        {group("Done", groups.done, "lg")}
         {group("Open", groups.open, "lg")}
+        {group("Done", groups.done, "lg")}
         {groups.other.length > 0 && (
           <>
             <hr className="text-periwinkle/30" />
             {group(current !== null && isBoxKeyword(current) ? "Keyword states" : "Checkbox states", groups.other, "sm")}
           </>
         )}
-        <div className="text-xs text-amethyst-smoke text-center">Hold a headline to delete it</div>
       </Column>
     </Modal>
   );
