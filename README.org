@@ -1,0 +1,70 @@
+#+HTML: <p align="center"><img src="app-icon.png" width="160" alt="Nouture logo"></p>
+#+HTML: <h1 align="center">Nouture</h1>
+#+HTML: <p align="center">Sync emacs org mode documents to your Android phone over Unison.</p>
+#+HTML: <p align="center"><a href="https://github.com/Aadniz/nouture/releases/latest"><img src="https://img.shields.io/github/v/release/Aadniz/nouture.svg" alt="Latest release"></a></p>
+
+Just another note-taking app, but leaning more into the emacs world.
+
+#+HTML: <p align="center"><img src="docs/screenshots/home.png" width="30%" alt="Recent notes, previewing their last edits"> <img src="docs/screenshots/note.png" width="30%" alt="An org file in the formatted view"> <img src="docs/screenshots/profile.png" width="30%" alt="A Unison profile's settings"></p>
+
+* Install
+
+#+HTML: <a href="https://apps.obtainium.imranr.dev/redirect?r=obtainium://add/https://github.com/Aadniz/nouture"><img src="https://raw.githubusercontent.com/ImranR98/Obtainium/main/assets/graphics/badge_obtainium.png" height="64" alt="Get it on Obtainium"></a>
+
+Add =https://github.com/Aadniz/nouture= to [[https://github.com/ImranR98/Obtainium][Obtainium]] to install it and get updates, or download the APK from the [[https://github.com/Aadniz/nouture/releases][releases]].
+
+You need:
+- An arm64 phone with Android 7 or newer.
+- A server you can reach over SSH, with Unison 2.52 or newer installed.
+
+* Setup
+
+1. Grant "All files access" so the org folder can live in shared storage.
+2. SSH: generate a key and add its public key to the server's
+   =~/.ssh/authorized_keys=, then describe the server in =~/.ssh/config=:
+
+   #+BEGIN_SRC conf
+   Host backup
+     HostName example.com
+     Port 2222
+     User me
+   #+END_SRC
+
+3. Add a profile. It's stored same as on Linux:
+
+   #+BEGIN_SRC conf
+   root = /storage/emulated/0/Documents/org
+   root = ssh://backup//path/to/org-notes
+   batch = true
+   fat = true
+   #+END_SRC
+
+   =fat = true= because Android's shared storage is case-insensitive and keeps
+   no Unix permissions.
+
+4. Press "Test connection" to review and trust the server's host key, then sync.
+
+* Development
+
+#+BEGIN_SRC sh
+npm install
+npm test                 # org parser/edit tests
+npm run dev:android      # Vite + live reload on a connected device
+npm run run:android      # build and install the standalone app
+#+END_SRC
+
+Development builds install as "Nouture dev", next to the released app, with
+their own Unison archives. =scripts/android.sh= also forwards the WebView
+debugger, follows the log and mirrors the screen.
+
+=scripts/build-unison-android.sh= rebuilds Unison and the SSH helper from
+source. It's only needed when updating Unison, and needs Docker that can run
+arm64 images (it also regenerates =src/unison/prefs.generated.json=).
+
+* Goals
+
+Later hopefully over pure SFTP and maybe git.
+
+-----
+
+Nouture bundles Unison, which is GPLv3; see [[file:NOTICE][NOTICE]].
