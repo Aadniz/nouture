@@ -29,7 +29,7 @@ export const App = () => {
     const color =
       getComputedStyle(document.documentElement).getPropertyValue(
         "--color-space-indigo"
-      ) || "#000000";
+      ) || "#282D4C";
     EdgeToEdge.setNavigationBarColor({
       color: color,
     });

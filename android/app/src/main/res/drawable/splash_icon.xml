@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The launch icon: the logo cut to a circle like on the home screen, without
+  its background so the artwork shows around it. Android draws a splash icon
+  without a background at 288dp and only promises the inner 192dp circle.
+-->
+<inset xmlns:android="http://schemas.android.com/apk/res/android"
+    android:drawable="@drawable/splash_logo"
+    android:inset="48dp" />
