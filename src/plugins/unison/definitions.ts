@@ -28,6 +28,8 @@ export interface Profile {
   roots: string[];
   localRoot?: string;
   autoSync: boolean;
+  /** The theme color marking this profile's notes, if one was picked */
+  color: string | null;
   running: boolean;
   lastResult: SyncResult | null;
   /** The last sync that got all the way through; a failed one doesn't count */
@@ -88,6 +90,7 @@ export interface UnisonPlugin {
   writeProfile(options: { name: string; text: string }): Promise<Profile>;
   deleteProfile(options: { name: string }): Promise<void>;
   setAutoSync(options: { name: string; enabled: boolean }): Promise<Profile>;
+  setColor(options: { name: string; color: string | null }): Promise<Profile>;
   sync(options: { name: string; reason?: string }): Promise<void>;
   testConnection(options: { name: string }): Promise<ConnectionTest>;
   trustHost(options: Omit<HostKey, "fingerprint">): Promise<void>;

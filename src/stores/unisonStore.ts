@@ -16,6 +16,7 @@ interface UnisonState {
   saveProfile: (name: string, text: string) => Promise<void>;
   deleteProfile: (name: string) => Promise<void>;
   setAutoSync: (name: string, enabled: boolean) => Promise<void>;
+  setColor: (name: string, color: string | null) => Promise<void>;
   sync: (name: string, reason?: string) => Promise<void>;
   /** Android's version of the Emacs hooks: sync the profile owning `path`. */
   syncFile: (path: string, reason: "open" | "save") => void;
@@ -53,6 +54,11 @@ export const useUnisonStore = create<UnisonState>()((set, get) => ({
 
   setAutoSync: async (name, enabled) => {
     const profile = await Unison.setAutoSync({ name, enabled });
+    set({ profiles: upsert(get().profiles, profile) });
+  },
+
+  setColor: async (name, color) => {
+    const profile = await Unison.setColor({ name, color });
     set({ profiles: upsert(get().profiles, profile) });
   },
 

@@ -7,6 +7,7 @@ import { IconButton, Page } from "../fragments/Page";
 import { Snackbar, SnackbarMessage } from "../fragments/Snackbar";
 import { Icon } from "../icons/icon";
 import { SyncSignal } from "../icons/SyncSignal";
+import { ColorSquare } from "../fragments/ProfileColor";
 import {
   Edit,
   LineMap,
@@ -565,7 +566,12 @@ const NotePage = ({ path }: { path: string }) => {
   const fileTitle = titleLine?.kind === "keyword" && titleLine.value ? titleLine.value : fileName(path);
 
   return (
-    <Page title={fileName(path)} actions={actions} fill={editing}>
+    <Page
+      title={fileName(path)}
+      titleMark={<ColorSquare color={profile?.color} className="w-2.5 h-2.5" />}
+      actions={actions}
+      fill={editing}
+    >
       {error && <div className="text-dusty-rose text-sm px-4 wrap-break-word">{error}</div>}
 
       {syncConflict && profile && (

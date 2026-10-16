@@ -3,12 +3,13 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button, PRIMARY } from "../fragments/Button";
 import { Row, SubHeader, Wrapper } from "../fragments/Elements";
+import { ColorSquare, colorClasses } from "../fragments/ProfileColor";
 import { IconButton } from "../fragments/Page";
 import { Icon } from "../icons/icon";
 import { useRowGestures } from "../hooks/useRowGestures";
 import { NotePreview, Notes } from "../plugins/notes";
 import { useNotesStore } from "../stores/notesStore";
-import { useUnisonStore } from "../stores/unisonStore";
+import { profileForPath, useUnisonStore } from "../stores/unisonStore";
 import { AccessBanner } from "./AccessBanner";
 import { NoteActions } from "./NoteActions";
 import { OrgSnippet } from "./OrgSnippet";
@@ -74,6 +75,7 @@ export const RecentNotes = () => {
               key={note.path}
               note={note}
               pinned={pinned.includes(note.path)}
+              color={profileForPath(profiles, note.path)?.color}
               onOpen={() => navigate(notePath(note.path))}
               onHold={() => setActionsFor(note.path)}
             />
@@ -96,11 +98,14 @@ export const RecentNotes = () => {
 const PreviewCard = ({
   note,
   pinned,
+  color,
   onOpen,
   onHold,
 }: {
   note: NotePreview;
   pinned: boolean;
+  /** Its profile's color */
+  color?: string | null;
   onOpen: () => void;
   onHold: () => void;
 }) => {
@@ -118,7 +123,11 @@ const PreviewCard = ({
         {/* Fade the lower half out towards the file name */}
         <div className="absolute inset-x-0 bottom-0 h-1/2 bg-linear-to-t from-graphite to-transparent" />
       </div>
-      <span className="self-end max-w-full flex items-center gap-1 text-xs font-bold text-desert-sand">
+      <span
+        className={`self-end max-w-full flex items-center gap-1 text-xs font-bold ${
+          colorClasses(color)?.text ?? "text-desert-sand"
+        }`}
+      >
         {pinned && <Icon title="pin_angle_fill" width={10} height={10} />}
         <span className="truncate">{note.name}</span>
       </span>
@@ -132,6 +141,7 @@ export const NoteRow = ({
   icon = "file_earmark_text",
   hidden = false,
   pinned = false,
+  color,
   onClick,
   onHold,
 }: {
@@ -141,6 +151,8 @@ export const NoteRow = ({
   /** Left off the front page: dimmed */
   hidden?: boolean;
   pinned?: boolean;
+  /** Its profile's color */
+  color?: string | null;
   onClick: () => void;
   onHold?: () => void;
 }) => {
@@ -156,7 +168,10 @@ export const NoteRow = ({
       <span className={`text-amethyst-smoke ${hidden ? "opacity-50" : ""}`}>
         <Icon title={icon} />
       </span>
-      <span className={`flex-1 truncate ${hidden ? "opacity-50" : ""}`}>{name}</span>
+      <span className={`flex-1 min-w-0 flex items-center gap-1.5 ${hidden ? "opacity-50" : ""}`}>
+        <span className="truncate">{name}</span>
+        <ColorSquare color={color} />
+      </span>
       {pinned && (
         <span className="text-desert-sand" title="Pinned to the front page">
           <Icon title="pin_angle_fill" width={12} height={12} />

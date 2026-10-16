@@ -39,6 +39,16 @@ object SyncState {
         save()
     }
 
+    /** The theme color marking the profile's notes, if one was picked */
+    @Synchronized
+    fun color(profile: String): String? = section("colors").optString(profile).takeIf { it.isNotEmpty() }
+
+    @Synchronized
+    fun setColor(profile: String, color: String?) {
+        if (color == null) section("colors").remove(profile) else section("colors").put(profile, color)
+        save()
+    }
+
     @Synchronized
     fun lastResult(profile: String): JSONObject? = section("results").optJSONObject(profile)
 
@@ -64,6 +74,7 @@ object SyncState {
     @Synchronized
     fun forget(profile: String) {
         section("autoSync").remove(profile)
+        section("colors").remove(profile)
         section("results").remove(profile)
         section("synced").remove(profile)
         save()

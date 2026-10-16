@@ -38,6 +38,10 @@ export class UnisonWeb extends WebPlugin implements UnisonPlugin {
     throw this.unimplemented("Not available on web");
   }
 
+  async setColor(): Promise<Profile> {
+    throw this.unimplemented("Not available on web");
+  }
+
   async sync(): Promise<void> {
     throw this.unimplemented("Not available on web");
   }

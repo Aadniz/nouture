@@ -143,6 +143,13 @@ class UnisonPlugin : Plugin() {
     }
 
     @PluginMethod
+    fun setColor(call: PluginCall) = background(call) {
+        val name = call.require("name")
+        SyncState.setColor(name, call.getString("color")?.takeIf { it.isNotEmpty() })
+        profileJson(name)
+    }
+
+    @PluginMethod
     fun sync(call: PluginCall) = background(call) {
         UnisonRunner.request(context, call.require("name"), call.getString("reason") ?: "manual")
         JSObject()
@@ -276,6 +283,7 @@ class UnisonPlugin : Plugin() {
         .put("roots", JSArray(Profiles.roots(name)))
         .put("localRoot", Profiles.localRoot(name)?.path)
         .put("autoSync", SyncState.isAutoSync(name))
+        .put("color", SyncState.color(name) ?: JSONObject.NULL)
         .put("running", UnisonRunner.isRunning(name))
         .put("lastResult", SyncState.lastResult(name)?.let { JSObject.fromJSONObject(it) } ?: JSONObject.NULL)
         .put("lastSyncedAt", SyncState.lastSyncedAt(name) ?: JSONObject.NULL)

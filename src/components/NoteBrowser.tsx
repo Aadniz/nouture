@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "../fragments/Button";
 import { Column, Input, Label, SubHeader, Wrapper } from "../fragments/Elements";
+import { colorClasses } from "../fragments/ProfileColor";
 import { Modal } from "../fragments/Modal";
 import { Page } from "../fragments/Page";
 import { NoteEntry, Notes } from "../plugins/notes";
@@ -86,6 +87,7 @@ const ProfileFiles = ({ profile }: { profile: Profile }) => {
               detail={prettyDateTime(new Date(entry.mtime), "short")}
               hidden={hidden.includes(entry.path)}
               pinned={pinned.includes(entry.path)}
+              color={profile.color}
               onClick={() => navigate(notePath(entry.path))}
               onHold={() => setActionsFor(entry.path)}
             />
@@ -95,7 +97,7 @@ const ProfileFiles = ({ profile }: { profile: Profile }) => {
 
   return (
     <Wrapper className="rounded-lg mb-6 shadow-lg">
-      <SubHeader>{profile.name}</SubHeader>
+      <SubHeader className={colorClasses(profile.color)?.text ?? ""}>{profile.name}</SubHeader>
       <div className="text-amethyst-smoke text-sm break-all mb-2">{root}</div>
       {renderDir(root, 0)}
       {entries.length === 0 && (

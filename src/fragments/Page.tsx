@@ -7,6 +7,8 @@ import { Wrapper } from "./Elements";
 
 interface PageProps {
   title: string;
+  /** Right after the title, e.g. the color of a note's profile */
+  titleMark?: ReactNode;
   actions?: ReactNode;
   children: ReactNode;
   /** Exactly the screen's height, so content (e.g. an editor) can fill it */
@@ -14,7 +16,7 @@ interface PageProps {
 }
 
 /** A sub page: compact bar with back button instead of the big logo header. */
-export const Page = ({ title, actions, children, fill }: PageProps) => {
+export const Page = ({ title, titleMark, actions, children, fill }: PageProps) => {
   const navigate = useNavigate();
   return (
     <div className={fill ? "flex flex-col h-dvh" : ""}>
@@ -22,7 +24,16 @@ export const Page = ({ title, actions, children, fill }: PageProps) => {
         <IconButton onClick={() => navigate(-1)} title="Back">
           <Icon title="arrow_left" width={20} height={20} />
         </IconButton>
-        <PageTitle>{title}</PageTitle>
+        <PageTitle>
+          {titleMark ? (
+            <span className="flex items-center gap-2">
+              <span className="truncate min-w-0">{title}</span>
+              {titleMark}
+            </span>
+          ) : (
+            title
+          )}
+        </PageTitle>
         {actions}
       </TopBar>
       <main

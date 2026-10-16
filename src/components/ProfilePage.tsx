@@ -4,6 +4,7 @@ import tw from "tailwind-styled-components";
 import { Button, DANGER, PRIMARY, SECONDARY } from "../fragments/Button";
 import { Column, Input, Label, Row, SubHeader, TextArea, Wrapper } from "../fragments/Elements";
 import { Modal } from "../fragments/Modal";
+import { ColorPicker } from "../fragments/ProfileColor";
 import { IconButton, Page } from "../fragments/Page";
 import { Icon } from "../icons/icon";
 import { Unison } from "../plugins/unison";
@@ -48,7 +49,7 @@ export const ProfileRoute = () => {
  */
 const ProfilePage = ({ existing }: { existing: string | null }) => {
   const navigate = useNavigate();
-  const { profiles, refresh, saveProfile, deleteProfile } = useUnisonStore();
+  const { profiles, refresh, saveProfile, deleteProfile, setColor } = useUnisonStore();
 
   const [name, setName] = useState(existing ?? "org-files");
   const [doc, setDoc] = useState<Profile | null>(existing ? null : parseProfile(NEW_PROFILE));
@@ -58,6 +59,10 @@ const ProfilePage = ({ existing }: { existing: string | null }) => {
   const [sshConfig, setSshConfig] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const savedColor = profiles.find((p) => p.name === existing)?.color ?? null;
+  // undefined until picked here
+  const [chosenColor, setChosenColor] = useState<string | null>();
+  const color = chosenColor === undefined ? savedColor : chosenColor;
 
   useEffect(() => {
     if (!profiles.length) refresh();
@@ -76,7 +81,9 @@ const ProfilePage = ({ existing }: { existing: string | null }) => {
 
   // Leaving with unsaved changes (back button too) asks first
   const dirty = useRef(false);
-  dirty.current = !!doc && (serializeProfile(doc) !== savedText || (!existing && name !== "org-files"));
+  dirty.current =
+    !!doc &&
+    (serializeProfile(doc) !== savedText || (!existing && name !== "org-files") || color !== savedColor);
   const blocker = useBlocker(() => dirty.current);
 
   const otherNames = profiles.map((p) => p.name).filter((n) => n !== existing);
@@ -101,6 +108,7 @@ const ProfilePage = ({ existing }: { existing: string | null }) => {
     }
     try {
       await saveProfile(existing ?? name, serializeProfile(doc));
+      if (color !== savedColor) await setColor(existing ?? name, color);
       dirty.current = false;
       return true;
     } catch (e) {
@@ -173,6 +181,9 @@ const ProfilePage = ({ existing }: { existing: string | null }) => {
             {nameError && <div className="text-dusty-rose text-sm mt-1">{nameError}</div>}
           </>
         )}
+        <FieldLabel>Color</FieldLabel>
+        <ColorPicker value={color} onChange={setChosenColor} />
+        <div className="text-xs text-amethyst-smoke mt-1">Marks this profile's notes, to tell them apart</div>
         <div className="text-amethyst-smoke text-sm mt-2">
           <i>
             ~/.unison/{existing ?? name}.prf, run as: unison {existing ?? name} -batch

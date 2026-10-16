@@ -4,6 +4,7 @@ import { Button, Chip } from "../fragments/Button";
 import { CheckIcon } from "../fragments/Checkbox";
 import { Box, Column, SubHeader, Wrapper } from "../fragments/Elements";
 import { Modal } from "../fragments/Modal";
+import { colorClasses } from "../fragments/ProfileColor";
 import { IconButton } from "../fragments/Page";
 import { Icon } from "../icons/icon";
 import { HostKey, Profile, SyncResult, Unison } from "../plugins/unison";
@@ -192,13 +193,14 @@ const ProfileCard = ({
   const testIsNewer = !!test?.at && (!result || test.at > result.finishedAt);
   const failedSince =
     result && !completed(result) && (!profile.lastSyncedAt || result.finishedAt > profile.lastSyncedAt);
+  const color = colorClasses(profile.color);
 
   return (
-    <Box className={`text-left p-3`}>
+    <Box className={`text-left p-3 ${color ? `border-l-4 ${color.border}` : ""}`}>
       <div className="flex items-center gap-1">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
-            <h2 className="truncate">{profile.name}</h2>
+            <h2 className={`truncate ${color?.text ?? ""}`}>{profile.name}</h2>
             {profile.running && (
               <div
                 className="w-2 h-2 bg-apricot rounded-full animate-pulse shrink-0"
