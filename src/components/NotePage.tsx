@@ -6,6 +6,7 @@ import { Modal } from "../fragments/Modal";
 import { IconButton, Page } from "../fragments/Page";
 import { Snackbar, SnackbarMessage } from "../fragments/Snackbar";
 import { Icon } from "../icons/icon";
+import { SyncSignal } from "../icons/SyncSignal";
 import {
   Edit,
   LineMap,
@@ -526,9 +527,11 @@ const NotePage = ({ path }: { path: string }) => {
           title={profile.running ? "Syncing" : "Sync now"}
           className={lastFailed && !profile.running ? "text-dusty-rose" : ""}
         >
-          <span className={`inline-block ${profile.running ? "animate-pulse" : ""}`}>
-            <Icon title={lastFailed && !profile.running ? "exclamation_triangle_fill" : "broadcast"} />
-          </span>
+          {lastFailed && !profile.running ? (
+            <Icon title="exclamation_triangle_fill" />
+          ) : (
+            <SyncSignal syncing={profile.running} />
+          )}
         </IconButton>
       )}
       {editing ? (

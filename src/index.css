@@ -19,6 +19,13 @@
     --color-dusty-rose: #D2A2AC;      /* pink sunset bands: errors */
     --color-lilac: #D1B1E3;           /* violet clouds: success */
     --color-persian-blue: #2042BF;    /* cobalt accents: sync */
+
+    /* A sync running: each part of the sync icon lights up in turn */
+    --animate-signal: signal 1.2s ease-in-out infinite;
+    @keyframes signal {
+        20% { fill: var(--color-navajo-white); }
+        45%, 100% { fill: currentColor; }
+    }
 }
 
 ::selection {
