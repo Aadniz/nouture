@@ -51,6 +51,7 @@ npm install
 npm test                 # org parser/edit tests
 npm run dev:android      # Vite + live reload on a connected device
 npm run run:android      # build and install the standalone app
+npm run release:android  # build and install the signed release build
 #+END_SRC
 
 Development builds install as "Nouture dev", next to the released app, with

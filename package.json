@@ -12,6 +12,7 @@
     "build": "vite build",
     "build:android": "npm run build && npx cap copy && npx cap sync android",
     "run:android": "scripts/android.sh install",
+    "release:android": "scripts/android.sh release",
     "dev:android": "scripts/android.sh dev",
     "logcat": "scripts/android.sh logcat",
     "mirror": "scripts/android.sh mirror",

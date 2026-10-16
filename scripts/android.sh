@@ -4,6 +4,7 @@
 #   android.sh dev       start Vite + install a live-reload build; Ctrl+C restores the normal app
 #   android.sh live      install a live-reload build (UI from Vite on this PC; needs Vite running)
 #   android.sh install   build + install the normal, self-contained app
+#   android.sh release   build + install the signed release build, over the released app
 #   android.sh devtools  forward the app's WebView debugger to localhost:9222
 #   android.sh logcat    follow the app's log, also across app restarts
 #   android.sh mirror    show and control the device's screen (scrcpy)
@@ -11,6 +12,7 @@ set -euo pipefail
 
 # The dev build (debug builds get the .debug suffix)
 APP=com.meowmeowteam.nouture.debug
+RELEASE_APP=com.meowmeowteam.nouture
 VITE_PORT=3113
 DEVTOOLS_PORT=9222
 
@@ -127,6 +129,24 @@ case "${1:-}" in
     npx cap run android --target "$SERIAL"
     ;;
 
+  release)
+    SERIAL=$(serial)
+    if [ ! -f android/keystore.properties ]; then
+      echo "android/keystore.properties is missing: without the release key the build can't" >&2
+      echo "replace the released app" >&2
+      exit 1
+    fi
+    # The latest tag's version: Android refuses older versions than the one
+    # installed, and Obtainium won't offer that same release again
+    version=$(git describe --tags --abbrev=0 2>/dev/null || echo v0.0.1)
+    version=${version#v}
+    echo "Building the release build as version $version"
+    npm run build:android
+    (cd android && ./gradlew -q assembleRelease -PappVersion="$version")
+    adb -s "$SERIAL" install -r android/app/build/outputs/apk/release/app-release.apk
+    adb -s "$SERIAL" shell monkey -p "$RELEASE_APP" -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1
+    ;;
+
   devtools)
     SERIAL=$(serial)
     pid=$(app_pid 60)
@@ -165,7 +185,7 @@ case "${1:-}" in
     ;;
 
   *)
-    sed -n '2,9p' "$0" | sed 's/^# \{0,1\}//'
+    sed -n '2,10p' "$0" | sed 's/^# \{0,1\}//'
     exit 1
     ;;
 esac
