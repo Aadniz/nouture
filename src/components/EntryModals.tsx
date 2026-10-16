@@ -7,7 +7,7 @@ import { useLast } from "../hooks/useLast";
 import { Icon } from "../icons/icon";
 import { deleteEntry } from "../org/edit";
 import { TodoSequence, isBoxKeyword, keywordKind, pickerGroups, suggestedState } from "../org/keywords";
-import { Headline, flatten } from "../org/parse";
+import { Headline, ListItem, flatten } from "../org/parse";
 import { KeywordLabel, keywordButtonColors } from "./KeywordLabel";
 import { InlineText } from "./OrgView";
 
@@ -18,6 +18,9 @@ export type EntryAction =
   | "tags"
   | "addBelow"
   | "addChild"
+  | "list"
+  | "toList"
+  | "toEntries"
   | "move"
   | "zoom"
   | "text"
@@ -33,10 +36,22 @@ const EDITS: { action: EntryAction; label: string; icon: React.ComponentProps<ty
 const STRUCTURE: { action: EntryAction; label: string; icon: React.ComponentProps<typeof Icon>["title"] }[] = [
   { action: "addBelow", label: "Add entry below", icon: "plus_lg" },
   { action: "addChild", label: "Add sub-entry", icon: "arrow_return_right" },
+  { action: "list", label: "Create list", icon: "list_ul" },
+  { action: "toList", label: "Turn sub-entries into a list", icon: "list_nested" },
+  { action: "toEntries", label: "Turn list into sub-entries", icon: "diagram_3" },
   { action: "move", label: "Move", icon: "arrows_move" },
   { action: "zoom", label: "Zoom in", icon: "zoom_in" },
   { action: "text", label: "Edit as text", icon: "body_text" },
 ];
+
+/** Whether an action fits the headline: lists need one, conversions something to convert */
+const applies = (action: EntryAction, h: Headline) => {
+  const hasList = h.body.some((b) => b.kind === "item");
+  if (action === "list") return !hasList;
+  if (action === "toEntries") return hasList;
+  if (action === "toList") return h.children.length > 0;
+  return true;
+};
 
 /** What a long press on a headline offers */
 export const EntrySheet = ({
@@ -83,7 +98,7 @@ export const EntrySheet = ({
           </button>
         ))}
       </div>
-      {STRUCTURE.filter(({ action }) => !hidden.includes(action)).map(({ action, label, icon }) => (
+      {STRUCTURE.filter(({ action }) => !hidden.includes(action) && (!shown || applies(action, shown))).map(({ action, label, icon }) => (
         <SheetRow key={action} onClick={() => act(action)}>
           <Icon title={icon} width={18} height={18} />
           {label}
@@ -92,6 +107,50 @@ export const EntrySheet = ({
       <SheetRow className="text-dusty-rose" onClick={() => act("delete")}>
         <Icon title="trash3" width={18} height={18} />
         Delete…
+      </SheetRow>
+    </Sheet>
+  );
+};
+
+export type ItemAction = "edit" | "addBelow" | "addChild" | "box" | "delete";
+
+/** What a long press on a list item offers: lists grow sub-items, not sub-entries */
+export const ItemSheet = ({
+  item,
+  onAction,
+  onClose,
+}: {
+  item: ListItem | null;
+  onAction: (action: ItemAction) => void;
+  onClose: () => void;
+}) => {
+  const shown = useLast(item);
+  const rows: { action: ItemAction; label: string; icon: React.ComponentProps<typeof Icon>["title"] }[] = [
+    { action: "edit", label: "Edit", icon: "pencil" },
+    { action: "addBelow", label: "Add item below", icon: "plus_lg" },
+    { action: "addChild", label: "Add sub-item", icon: "arrow_return_right" },
+    shown?.checkbox === null
+      ? { action: "box", label: "Add checkbox", icon: "check2_square" }
+      : { action: "box", label: "Remove checkbox", icon: "square" },
+  ];
+
+  return (
+    <Sheet show={!!item} onClose={onClose}>
+      {shown && (
+        <div className="text-navajo-white px-1 pb-3 line-clamp-2 wrap-break-word">
+          <span className="text-lavender-grey mr-2">{/\d/.test(shown.bullet) ? shown.bullet : "•"}</span>
+          {shown.text ? <InlineText text={shown.text} /> : <i className="text-lavender-grey">Empty item</i>}
+        </div>
+      )}
+      {rows.map(({ action, label, icon }) => (
+        <SheetRow key={action} onClick={() => onAction(action)}>
+          <Icon title={icon} width={18} height={18} />
+          {label}
+        </SheetRow>
+      ))}
+      <SheetRow className="text-dusty-rose" onClick={() => onAction("delete")}>
+        <Icon title="trash3" width={18} height={18} />
+        Delete
       </SheetRow>
     </Sheet>
   );

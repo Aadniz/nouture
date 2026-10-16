@@ -1,5 +1,5 @@
 import { isDone, sequenceOf } from "./keywords";
-import { Headline, OrgDocument, flatten, headlinePath, parse, parseItem, serialize } from "./parse";
+import { Headline, ListItem, OrgDocument, flatten, headlinePath, parse, parseItem, serialize } from "./parse";
 
 /**
  * Text edits that behave like their org-mode commands. Only the touched lines
@@ -144,11 +144,17 @@ export const toggleCheckbox = (text: string, line: number): string => {
   lines[line] = setBox(lines[line], item.checkbox === "X" ? " " : "X");
 
   const section = headlinePath(doc.headlines, line).pop();
-  const start = section ? section.line + 1 : 0;
-  const end = sectionEnd(lines, start);
+  refreshParentItems(lines, line, item.indent, section ? section.line + 1 : 0);
+  recount(lines, doc.eols, [section?.line]);
+  return serialize({ lines, eols: doc.eols });
+};
 
-  // Walk up through the parent items, like org-update-checkbox-count
-  let indent = item.indent;
+/**
+ * Like org-update-checkbox-count: walks up from an item at `line` (indented
+ * `indent`), fixing each parent item's box and [n/m] from its children.
+ */
+const refreshParentItems = (lines: string[], line: number, indent: number, start: number) => {
+  const end = sectionEnd(lines, start);
   for (let p = line - 1; p >= start && indent > 0; p--) {
     if (lines[p].trim() === "") continue;
     const parent = parseItem(lines[p]);
@@ -174,13 +180,239 @@ export const toggleCheckbox = (text: string, line: number): string => {
     }
     lines[p] = writeCookies(lines[p], checked, boxes.length);
   }
+};
 
-  if (section) {
-    const updated = parse(serialize({ lines, eols: doc.eols }));
-    const fresh = headlinePath(updated.headlines, section.line).pop();
-    if (fresh) lines[section.line] = recountHeadline(updated, fresh);
+const ORDERED = /^(\d+)([.)])$/;
+
+/** The bullet after this one: the next number in an ordered list */
+const nextBullet = (bullet: string) => {
+  const ordered = ORDERED.exec(bullet);
+  return ordered ? `${Number(ordered[1]) + 1}${ordered[2]}` : bullet;
+};
+
+const indentOf = (line: string) => line.length - line.trimStart().length;
+
+/** The first line after the item at `line`: past its text and sub-items */
+const itemEnd = (lines: string[], line: number, end: number) => {
+  const indent = parseItem(lines[line])!.indent;
+  let last = line;
+  for (let i = line + 1; i < end; i++) {
+    if (lines[i].trim() === "") continue;
+    if (indentOf(lines[i]) <= indent) break;
+    last = i;
   }
+  return last + 1;
+};
+
+/** Renumbers the ordered items at `indent` from line `from` on, by `delta` */
+const shiftNumbers = (lines: string[], from: number, indent: number, delta: number) => {
+  for (let i = from; i < lines.length; i++) {
+    if (lines[i].trim() === "") continue;
+    if (indentOf(lines[i]) > indent) continue;
+    const item = parseItem(lines[i]);
+    if (indentOf(lines[i]) < indent || !item || /^\*+\s/.test(lines[i])) break;
+    const ordered = ORDERED.exec(item.bullet);
+    if (ordered) lines[i] = lines[i].replace(/^(\s*)\d+/, (_, lead) => `${lead}${Number(ordered[1]) + delta}`);
+  }
+};
+
+/** The headline whose section has `line`, and where that section starts */
+const sectionOf = (doc: OrgDocument, line: number) => {
+  const section = headlinePath(doc.headlines, line).pop();
+  return { section, start: section ? section.line + 1 : 0 };
+};
+
+/**
+ * A first, empty item at the end of the entry's own text, before its
+ * sub-entries. Returns where it is.
+ */
+export const startList = (text: string, line: number): Edit & { line: number } => {
+  const doc = parse(text);
+  const h = entryAt(doc, line)?.headline;
+  if (!h) return { text, map: sameLines, line: -1 };
+  let at = h.children[0]?.line ?? subtreeEnd(doc, h);
+  while (at > h.line + 1 && doc.lines[at - 1].trim() === "") at--;
+  const { lines, eols, map } = insertLines(doc, at, ["- "]);
+  return { text: serialize({ lines, eols }), map, line: at };
+};
+
+/**
+ * org-insert-item: an empty item after the item at `line` (and its
+ * sub-items), or as its last sub-item. It gets a box when its siblings have
+ * one. Returns where the new item is.
+ */
+export const addItem = (text: string, line: number, child: boolean): Edit & { line: number } => {
+  const doc = parse(text);
+  const item = parseItem(doc.lines[line]);
+  if (!item) return { text, map: sameLines, line: -1 };
+  const { section, start } = sectionOf(doc, line);
+  const end = sectionEnd(doc.lines, line + 1);
+  const at = itemEnd(doc.lines, line, end);
+
+  // A sibling gets the item's indentation; a sub-item its siblings', or goes under the text
+  let lead = doc.lines[line].slice(0, item.indent);
+  let bullet = nextBullet(item.bullet);
+  let boxed = item.checkbox !== null;
+  if (child) {
+    const lastLine = itemChildren(doc.lines, line, end).at(-1);
+    const last = lastLine === undefined ? null : parseItem(doc.lines[lastLine])!;
+    lead = last ? doc.lines[lastLine!].slice(0, last.indent) : lead + " ".repeat(item.bullet.length + 1);
+    bullet = last ? nextBullet(last.bullet) : "-";
+    boxed = last ? last.checkbox !== null : boxed;
+  }
+  const { lines, eols, map } = insertLines(doc, at, [`${lead}${bullet} ${boxed ? "[ ] " : ""}`]);
+  if (!child) shiftNumbers(lines, at + 1, lead.length, 1);
+  refreshParentItems(lines, at, lead.length, start);
+  recount(lines, eols, [section?.line]);
+  return { text: serialize({ lines, eols }), map, line: at };
+};
+
+/** An item's text, keeping its bullet and box */
+export const setItemText = (text: string, line: number, value: string): string => {
+  const doc = parse(text);
+  const item = parseItem(doc.lines[line]);
+  const clean = value.replace(/\s+/g, " ").trim();
+  if (!item || clean === item.text) return text;
+  const lines = [...doc.lines];
+  lines[line] = itemLine(doc.lines[line], item, item.checkbox, clean);
   return serialize({ lines, eols: doc.eols });
+};
+
+/** org-toggle-checkbox with a prefix: gives an item a box, or takes it away */
+export const toggleItemBox = (text: string, line: number): string => {
+  const doc = parse(text);
+  const item = parseItem(doc.lines[line]);
+  if (!item) return text;
+  const lines = [...doc.lines];
+  lines[line] = itemLine(doc.lines[line], item, item.checkbox === null ? " " : null, item.text);
+  const { section, start } = sectionOf(doc, line);
+  refreshParentItems(lines, line, item.indent, start);
+  recount(lines, doc.eols, [section?.line]);
+  return serialize({ lines, eols: doc.eols });
+};
+
+/** Removes an item with its sub-items, then fixes the numbers, boxes and [n/m] around it */
+export const deleteItem = (text: string, line: number): Edit => {
+  const doc = parse(text);
+  const item = parseItem(doc.lines[line]);
+  if (!item) return { text, map: sameLines };
+  const { section, start } = sectionOf(doc, line);
+  const end = itemEnd(doc.lines, line, sectionEnd(doc.lines, line + 1));
+
+  const lines = [...doc.lines];
+  const eols = [...doc.eols];
+  lines.splice(line, end - line);
+  eols.splice(line, end - line);
+  fixEnding(doc, eols);
+  shiftNumbers(lines, line, item.indent, -1);
+  refreshParentItems(lines, line, item.indent, start);
+  recount(lines, eols, [section?.line]);
+
+  const removed = end - line;
+  const map: LineMap = (l) => (l < line ? l : l < end ? null : l - removed);
+  return { text: serialize({ lines, eols }), map };
+};
+
+/** An item line from its parts; the indentation stays as it was */
+const itemLine = (old: string, item: ListItem, box: ListItem["checkbox"], text: string) =>
+  `${old.slice(0, item.indent)}${item.bullet} ${box === null ? "" : `[${box}] `}${text}`;
+
+/**
+ * org-toggle-item on an entry's sub-entries: they become a list in their
+ * place, nested like they were. A TODO state becomes a box ([X] when done);
+ * priority and tags stay in the text. Each entry's text, planning and
+ * properties go under its item (Emacs drops the latter two), so
+ * listToEntries can bring them back.
+ */
+export const entriesToList = (text: string, line: number): Edit => {
+  const doc = parse(text);
+  const h = entryAt(doc, line)?.headline;
+  if (!h || h.children.length === 0) return { text, map: sameLines };
+
+  const from = h.children[0].line;
+  const end = contentEnd(doc, h);
+  const items: string[] = [];
+  for (const child of flatten(h.children)) {
+    const indent = " ".repeat((child.level - h.level - 1) * 2);
+    let rest = doc.lines[child.line].replace(/^\*+\s*/, "");
+    if (child.keyword) rest = rest.slice(child.keyword.length).trimStart();
+    const box = child.keyword ? (isDone(doc.sequences, child.keyword) ? "[X] " : "[ ] ") : "";
+    items.push(`${indent}- ${box}${rest}`);
+
+    const body = doc.lines.slice(child.line + 1, child.children[0]?.line ?? subtreeEnd(doc, child));
+    const shift = Math.min(...body.filter((l) => l.trim() !== "").map(indentOf));
+    for (const l of body) items.push(l.trim() === "" ? "" : `${indent}  ${l.slice(shift)}`);
+  }
+  // Two blank lines in a row would end the list
+  const list = items.filter((l, i) => l !== "" || (i > 0 && items[i - 1] !== ""));
+  while (list.at(-1) === "") list.pop();
+
+  const lines = [...doc.lines.slice(0, from), ...list, ...doc.lines.slice(end)];
+  const eols = [...doc.eols.slice(0, from), ...list.map(() => ""), ...doc.eols.slice(end)];
+  fixEnding(doc, eols);
+  recount(lines, eols, [h.line]);
+  const delta = list.length - (end - from);
+  const map: LineMap = (l) => (l < from ? l : l < end ? null : l + delta);
+  return { text: serialize({ lines, eols }), map };
+};
+
+/**
+ * org-toggle-heading on an entry's lists: each item becomes a sub-entry,
+ * nested items deeper. Boxes become TODO states, [X] the first done one,
+ * and an item's other lines become its entry's text. The new entries come
+ * after the entry's other text, before its existing sub-entries.
+ */
+export const listToEntries = (text: string, line: number): Edit => {
+  const doc = parse(text);
+  const h = entryAt(doc, line)?.headline;
+  const items = new Set(h?.body.flatMap((b) => (b.kind === "item" ? [b.line] : [])));
+  if (!h || items.size === 0) return { text, map: sameLines };
+
+  const start = h.line + 1;
+  let end = h.children[0]?.line ?? subtreeEnd(doc, h);
+  while (end > start && doc.lines[end - 1].trim() === "") end--;
+  const open = doc.sequences[0]?.active[0] ?? "TODO";
+  const done = doc.sequences[0]?.done[0] ?? "DONE";
+
+  const kept: string[] = [];
+  const entries: string[] = [];
+  const convert = (i: number, stop: number, level: number) => {
+    const item = parseItem(doc.lines[i])!;
+    const keyword = item.checkbox === null ? "" : `${item.checkbox === "X" ? done : open} `;
+    entries.push(`${"*".repeat(level)} ${keyword}${item.text}`);
+    const column = doc.lines[i].length - item.text.length;
+    for (let j = i + 1; j < stop; ) {
+      if (items.has(j)) {
+        const childStop = itemEnd(doc.lines, j, stop);
+        convert(j, childStop, level + 1);
+        j = childStop;
+      } else {
+        const l = doc.lines[j++];
+        entries.push(l.trim() === "" ? "" : l.slice(Math.min(column, indentOf(l))));
+      }
+    }
+  };
+  for (let i = start; i < end; ) {
+    if (items.has(i)) {
+      const stop = itemEnd(doc.lines, i, end);
+      convert(i, stop, h.level + 1);
+      i = stop;
+    } else {
+      kept.push(doc.lines[i++]);
+    }
+  }
+  // Without the blank lines that were around the list
+  const other = kept.filter((l, i) => l.trim() !== "" || (i > 0 && kept[i - 1].trim() !== ""));
+  while (other.length > 0 && other.at(-1)!.trim() === "") other.pop();
+
+  const section = [...other, ...entries];
+  const lines = [...doc.lines.slice(0, start), ...section, ...doc.lines.slice(end)];
+  const eols = [...doc.eols.slice(0, start), ...section.map(() => ""), ...doc.eols.slice(end)];
+  fixEnding(doc, eols);
+  recount(lines, eols, [h.line]);
+  const delta = section.length - (end - start);
+  const map: LineMap = (l) => (l < start ? l : l < end ? null : l + delta);
+  return { text: serialize({ lines, eols }), map };
 };
 
 /**

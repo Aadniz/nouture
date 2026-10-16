@@ -4,7 +4,7 @@ import { canShift, entryAt, subtreeEnd } from "../org/edit";
 import { Folds, Visibility, cycle, isExpanded, isOpen, showsText, toggleOpen, visibilityOf } from "../org/folds";
 import { Inline, parseInline } from "../org/inline";
 import { isDone, keywordKind } from "../org/keywords";
-import { Block, Headline, OrgDocument, headlinePath } from "../org/parse";
+import { Block, Headline, ListItem, OrgDocument, headlinePath } from "../org/parse";
 import { DragState, useDragMove } from "../hooks/useDragMove";
 import { Direction, SWIPE_PX, useRowGestures } from "../hooks/useRowGestures";
 import { KeywordLabel } from "./KeywordLabel";
@@ -34,6 +34,12 @@ interface Context {
   fileTitle: string;
   onAddEntry: () => void;
   onCheckbox: (line: number) => void;
+  /** Long press on a list item */
+  onItemHold: (line: number) => void;
+  /** The list item whose text is being edited */
+  editingItem: number | null;
+  /** The item's new text, or null to cancel */
+  onItemText: (line: number, text: string | null) => void;
   onOpenFile: (target: string) => void;
 }
 
@@ -207,7 +213,15 @@ const SwipeHint = ({ dx, allowed }: { dx: number; allowed: boolean }) => (
 );
 
 /** Editing a title in place: Enter or leaving the field saves, Escape cancels */
-const TitleField = ({ initial, onDone }: { initial: string; onDone: (title: string | null) => void }) => {
+const TitleField = ({
+  initial,
+  placeholder = "Title",
+  onDone,
+}: {
+  initial: string;
+  placeholder?: string;
+  onDone: (title: string | null) => void;
+}) => {
   const field = useRef<HTMLTextAreaElement>(null);
   const finished = useRef(false);
   const finish = (title: string | null) => {
@@ -236,7 +250,7 @@ const TitleField = ({ initial, onDone }: { initial: string; onDone: (title: stri
       defaultValue={initial}
       rows={1}
       enterKeyHint="done"
-      placeholder="Title"
+      placeholder={placeholder}
       className="flex-1 min-w-0 resize-none bg-jet-black rounded px-1 outline-none select-text placeholder:text-lavender-grey/60"
       onInput={fit}
       onKeyDown={(e) => {
@@ -379,28 +393,8 @@ const BlockView = ({ block, ctx }: { block: Block; ctx: Context }) => {
         </pre>
       );
 
-    case "item": {
-      const { item } = block;
-      const checked = item.checkbox === "X";
-      return (
-        <div className="flex gap-2 items-start" style={{ paddingLeft: `${item.indent}ch` }}>
-          <span className="text-lavender-grey">{/\d/.test(item.bullet) ? item.bullet : "•"}</span>
-          {item.checkbox !== null && (
-            <button
-              className="text-amethyst-smoke pt-1 cursor-pointer"
-              onClick={() => ctx.onCheckbox(block.line)}
-            >
-              <Icon
-                title={checked ? "check_square" : item.checkbox === "-" ? "dash_square" : "square"}
-              />
-            </button>
-          )}
-          <span className={`flex-1 wrap-break-word ${checked ? "text-lavender-grey" : ""}`}>
-            <InlineText text={item.text} onOpenFile={ctx.onOpenFile} />
-          </span>
-        </div>
-      );
-    }
+    case "item":
+      return <ItemView line={block.line} item={block.item} ctx={ctx} />;
 
     case "text":
       return (
@@ -409,6 +403,40 @@ const BlockView = ({ block, ctx }: { block: Block; ctx: Context }) => {
         </div>
       );
   }
+};
+
+/** A list item: tap its box to check it, hold it for what else can be done */
+const ItemView = ({ line, item, ctx }: { line: number; item: ListItem; ctx: Context }) => {
+  const editing = ctx.editingItem === line;
+  const hold = useRowGestures({ onHold: () => ctx.onItemHold(line) });
+  const checked = item.checkbox === "X";
+  return (
+    <div
+      className={`flex gap-2 items-start -mx-1 px-1 rounded-md select-none [-webkit-touch-callout:none] transition-colors ${
+        hold.pressing ? "bg-dusty-grape/40 duration-500" : "duration-150"
+      }`}
+      style={{ paddingLeft: `calc(${item.indent}ch + 0.25rem)` }}
+      // A click handler makes the row a tap target of its own. Without one,
+      // Chromium's touch adjustment moves presses near a headline (like on
+      // the first item under it) onto that headline instead.
+      onClick={() => {}}
+      {...(editing ? {} : hold.handlers)}
+    >
+      <span className="text-lavender-grey">{/\d/.test(item.bullet) ? item.bullet : "•"}</span>
+      {item.checkbox !== null && (
+        <button className="text-amethyst-smoke pt-1 cursor-pointer" onClick={() => ctx.onCheckbox(line)}>
+          <Icon title={checked ? "check_square" : item.checkbox === "-" ? "dash_square" : "square"} />
+        </button>
+      )}
+      {editing ? (
+        <TitleField initial={item.text} placeholder="Item" onDone={(text) => ctx.onItemText(line, text)} />
+      ) : (
+        <span className={`flex-1 wrap-break-word ${checked ? "text-lavender-grey" : ""}`}>
+          <InlineText text={item.text} onOpenFile={ctx.onOpenFile} />
+        </span>
+      )}
+    </div>
+  );
 };
 
 const Meta = ({ children }: { children: React.ReactNode }) => (

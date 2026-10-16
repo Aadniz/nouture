@@ -12,22 +12,29 @@ import {
   Edit,
   LineMap,
   addEntry,
+  addItem,
   appendEntry,
   deleteEntry,
+  deleteItem,
+  entriesToList,
   entryAt,
+  listToEntries,
   moveSubtree,
   moveSubtreeTo,
   sameLines,
+  setItemText,
   setPriority,
   setTags,
   setTitle,
   setTodo,
   shiftSubtree,
+  startList,
   subtreeEnd,
   toggleCheckbox,
+  toggleItemBox,
 } from "../org/edit";
 import { Folds, initialFolds, remapFolds, unfold } from "../org/folds";
-import { Headline, knownTags, parse, priorities, serialize } from "../org/parse";
+import { Headline, OrgDocument, headlinePath, knownTags, parse, parseItem, priorities, serialize } from "../org/parse";
 import { Notes } from "../plugins/notes";
 import { fileName, useNotesStore } from "../stores/notesStore";
 import { profileForPath, useUnisonStore } from "../stores/unisonStore";
@@ -36,6 +43,8 @@ import {
   DeleteEntryModal,
   EntryAction,
   EntrySheet,
+  ItemAction,
+  ItemSheet,
   PriorityPicker,
   StatePicker,
   TagPicker,
@@ -111,6 +120,9 @@ const NotePage = ({ path }: { path: string }) => {
   const [tagsFor, setTagsFor] = useState<Headline | null>(null);
   const [deleteFor, setDeleteFor] = useState<Headline | null>(null);
   const [renaming, setRenaming] = useState<{ line: number; fresh: boolean } | null>(null);
+  /** The list item held, by line */
+  const [itemFor, setItemFor] = useState<number | null>(null);
+  const [editingItem, setEditingItem] = useState<{ line: number; fresh: boolean } | null>(null);
   const [moving, setMoving] = useState<number | null>(null);
   /** The undo history's length when move mode started, to cancel it */
   const [moveStart, setMoveStart] = useState<number | null>(null);
@@ -125,8 +137,8 @@ const NotePage = ({ path }: { path: string }) => {
   bufferRef.current = buffer;
   const draftRef = useRef(draft);
   draftRef.current = draft;
-  const view = useRef({ folds, zoom, moving, renaming });
-  view.current = { folds, zoom, moving, renaming };
+  const view = useRef({ folds, zoom, moving, renaming, editingItem });
+  view.current = { folds, zoom, moving, renaming, editingItem };
   const autosave = useRef<{ timer: number; text: string } | null>(null);
   const openSynced = useRef(false);
 
@@ -227,6 +239,7 @@ const NotePage = ({ path }: { path: string }) => {
     setZoom(snapshot.zoom);
     setMoving(snapshot.moving);
     setRenaming(null);
+    setEditingItem(null);
     setSnack(null);
     write(snapshot.text);
   };
@@ -350,6 +363,62 @@ const NotePage = ({ path }: { path: string }) => {
     applyEdit(setTitle(bufferRef.current.text, h.line, clean), sameLines, current.fresh);
   };
 
+  /** The item at `line` in sight: its entry open, showing its text */
+  const revealLine = (f: Folds, updated: OrgDocument, line: number): Folds => {
+    const opened = unfold(f, updated, line, true);
+    const owner = headlinePath(updated.headlines, line).at(-1);
+    return owner && opened.headlines[owner.line] === "headings"
+      ? { ...opened, headlines: { ...opened.headlines, [owner.line]: "children" } }
+      : opened;
+  };
+
+  /** A new item opens for typing; leaving it empty takes it back out */
+  const addListItem = (result: Edit & { line: number }) => {
+    if (result.line < 0 || !applyEdit(result.text, result.map)) return;
+    const updated = parse(result.text);
+    setFolds((f) => f && revealLine(f, updated, result.line));
+    setEditingItem({ line: result.line, fresh: true });
+  };
+
+  const finishItemText = (line: number, text: string | null) => {
+    const current = view.current.editingItem;
+    if (!current || current.line !== line) return;
+    setEditingItem(null);
+    const clean = text?.replace(/\s+/g, " ").trim() ?? "";
+    if (current.fresh && !clean) return undo();
+    if (!clean || !bufferRef.current) return;
+    applyEdit(setItemText(bufferRef.current.text, line, clean), sameLines, current.fresh);
+  };
+
+  const onItemAction = (action: ItemAction) => {
+    const line = itemFor;
+    setItemFor(null);
+    const current = bufferRef.current;
+    if (line === null || !current) return;
+    switch (action) {
+      case "edit":
+        return setEditingItem({ line, fresh: false });
+      case "addBelow":
+        return addListItem(addItem(current.text, line, false));
+      case "addChild":
+        return addListItem(addItem(current.text, line, true));
+      case "box":
+        return applyEdit(toggleItemBox(current.text, line));
+      case "delete": {
+        const { text, map } = deleteItem(current.text, line);
+        if (applyEdit(text, map)) notify("Item deleted");
+        return;
+      }
+    }
+  };
+
+  /** A conversion leaves the entry open, showing what it became */
+  const convert = (h: Headline, { text, map }: Edit, message: string) => {
+    if (!applyEdit(text, map)) return;
+    setFolds((f) => f && { ...f, headlines: { ...f.headlines, [h.line]: "subtree" } });
+    notify(message);
+  };
+
   const shift = (h: Headline, delta: 1 | -1) => {
     const current = bufferRef.current;
     if (!current) return;
@@ -413,6 +482,12 @@ const NotePage = ({ path }: { path: string }) => {
         return add(addEntry(current.text, h.line, false));
       case "addChild":
         return add(addEntry(current.text, h.line, true));
+      case "list":
+        return addListItem(startList(current.text, h.line));
+      case "toList":
+        return convert(h, entriesToList(current.text, h.line), "Turned into a list");
+      case "toEntries":
+        return convert(h, listToEntries(current.text, h.line), "Turned into sub-entries");
       case "move":
         setMoveStart(history.length);
         return setMoving(h.line);
@@ -443,6 +518,7 @@ const NotePage = ({ path }: { path: string }) => {
       [priorityFor, setPriorityFor],
       [tagsFor, setTagsFor],
       [deleteFor, setDeleteFor],
+      [itemFor, setItemFor],
     ];
     const open = overlays.find(([value]) => value !== null);
     if (open) {
@@ -453,6 +529,12 @@ const NotePage = ({ path }: { path: string }) => {
       // The title field saves when it loses focus
       (document.activeElement as HTMLElement | null)?.blur();
       setRenaming(null);
+      return true;
+    }
+    if (editingItem) {
+      // The item field saves when it loses focus
+      (document.activeElement as HTMLElement | null)?.blur();
+      setEditingItem(null);
       return true;
     }
     if (moving !== null) {
@@ -470,7 +552,8 @@ const NotePage = ({ path }: { path: string }) => {
     return false;
   };
   const canStepBack =
-    !!(sheetFor || todoFor || priorityFor || tagsFor || deleteFor || renaming || section) ||
+    !!(sheetFor || todoFor || priorityFor || tagsFor || deleteFor || renaming || editingItem || section) ||
+    itemFor !== null ||
     moving !== null ||
     zoom.length > 0;
   const canStepBackRef = useRef(canStepBack);
@@ -644,6 +727,9 @@ const NotePage = ({ path }: { path: string }) => {
           fileTitle={fileTitle}
           onAddEntry={addAtEnd}
           onCheckbox={(line) => applyEdit(toggleCheckbox(buffer.text, line))}
+          onItemHold={setItemFor}
+          editingItem={editingItem?.line ?? null}
+          onItemText={finishItemText}
           onOpenFile={openFile}
         />
       ) : (
@@ -681,6 +767,12 @@ const NotePage = ({ path }: { path: string }) => {
         hidden={sheetFor && sheetFor.line === zoomRoot?.line ? ["addBelow", "move", "zoom"] : []}
         onAction={onSheetAction}
         onClose={() => setSheetFor(null)}
+      />
+
+      <ItemSheet
+        item={itemFor !== null && doc ? parseItem(doc.lines[itemFor] ?? "") : null}
+        onAction={onItemAction}
+        onClose={() => setItemFor(null)}
       />
 
       <StatePicker

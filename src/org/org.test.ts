@@ -1,17 +1,24 @@
 import { describe, expect, it } from "vitest";
 import {
   addEntry,
+  addItem,
   appendEntry,
   canShift,
   deleteEntry,
+  deleteItem,
+  entriesToList,
+  listToEntries,
   moveSubtree,
   moveSubtreeTo,
+  setItemText,
   setPriority,
   setTags,
   setTitle,
   setTodo,
   shiftSubtree,
+  startList,
   toggleCheckbox,
+  toggleItemBox,
 } from "./edit";
 import { parseInline } from "./inline";
 import { DOOM_SEQUENCES, keywordKind, pickerGroups, suggestedState, todoSequences } from "./keywords";
@@ -596,5 +603,108 @@ describe("unfold", () => {
     expect(unfold(folds, doc, beta + 1).headlines).toMatchObject({ 0: "children", [beta]: "children" });
     expect(unfold(folds, doc, beta).headlines).toMatchObject({ 0: "children", [beta]: "folded" });
     expect(unfold(folds, doc, beta, true).headlines[beta]).toBe("children");
+  });
+});
+
+const BLOG = `* NO Make blog
+- Make website in Larvel
+- Show live daily tasks
+  - Some other list item
+  - Random thing
+    - Another random thing
+- Upload tutorials
+* PROJ Bin slapper
+`;
+
+describe("lists", () => {
+  it("starts a list after the entry's own text, before its sub-entries", () => {
+    const { text, line } = startList("* A\nIntro\n\n** Child\n", 0);
+    expect(text).toBe("* A\nIntro\n- \n\n** Child\n");
+    expect(line).toBe(2);
+    expect(startList(BLOG, lineOf(BLOG, "Bin slapper")).text).toContain("* PROJ Bin slapper\n- \n");
+  });
+
+  it("adds an item after an item's sub-items, or as its last sub-item", () => {
+    const below = addItem(BLOG, lineOf(BLOG, "Show live"), false);
+    expect(below.text).toContain("    - Another random thing\n- \n- Upload tutorials");
+    expect(below.line).toBe(lineOf(BLOG, "Upload tutorials"));
+    const sub = addItem(BLOG, lineOf(BLOG, "Show live"), true);
+    expect(sub.text).toContain("    - Another random thing\n  - \n- Upload tutorials");
+    const first = addItem(BLOG, lineOf(BLOG, "Upload tutorials"), true);
+    expect(first.text).toContain("- Upload tutorials\n  - \n* PROJ");
+  });
+
+  it("gives new items a box like their siblings, and counts them", () => {
+    expect(addItem("* Packing [1/1]\n- [X] Boots\n", 1, false).text).toBe("* Packing [1/2]\n- [X] Boots\n- [ ] \n");
+  });
+
+  it("numbers ordered items", () => {
+    expect(addItem("1. a\n2. b\n3. c\n", 0, false).text).toBe("1. a\n2. \n3. b\n4. c\n");
+    expect(deleteItem("1. a\n2. b\n3. c\n", 0).text).toBe("1. b\n2. c\n");
+  });
+
+  it("edits an item's text and box, keeping the rest", () => {
+    expect(setItemText("  - [X] old\n", 0, " new  text ")).toBe("  - [X] new text\n");
+    expect(toggleItemBox("- a\n", 0)).toBe("- [ ] a\n");
+    expect(toggleItemBox("- [X] a\n", 0)).toBe("- a\n");
+  });
+
+  it("deletes an item with its sub-items and recounts", () => {
+    expect(deleteItem(BLOG, lineOf(BLOG, "Show live")).text).toBe(
+      "* NO Make blog\n- Make website in Larvel\n- Upload tutorials\n* PROJ Bin slapper\n"
+    );
+    expect(deleteItem("* T [1/2]\n- [X] a\n- [ ] b\n", 2).text).toBe("* T [1/1]\n- [X] a\n");
+  });
+
+  it("turns sub-entries into a nested list, states into boxes", () => {
+    const text = `* DONE Rewrite detyx in rust
+** DONE Embed the key
+** DONE Less textbooky
+*** Only make an educated guess
+* PROJ Lage flipside
+`;
+    expect(entriesToList(text, 0).text).toBe(`* DONE Rewrite detyx in rust
+- [X] Embed the key
+- [X] Less textbooky
+  - Only make an educated guess
+* PROJ Lage flipside
+`);
+  });
+
+  it("turns a list into sub-entries, nested items deeper", () => {
+    expect(listToEntries(BLOG, 0).text).toBe(`* NO Make blog
+** Make website in Larvel
+** Show live daily tasks
+*** Some other list item
+*** Random thing
+**** Another random thing
+** Upload tutorials
+* PROJ Bin slapper
+`);
+  });
+
+  it("keeps the entry's other text first and its sub-entries after", () => {
+    expect(listToEntries("* A\nIntro\n- x\n\nOutro\n** Old\n", 0).text).toBe("* A\nIntro\n\nOutro\n** x\n** Old\n");
+  });
+
+  it("goes back and forth without losing anything", () => {
+    const text = `* Parent [1/2]
+** TODO Task one
+SCHEDULED: <2026-10-20 Tue>
+Some text
+** DONE Task two :home:
+*** Plain sub
+* Next
+`;
+    const list = entriesToList(text, 0).text;
+    expect(list).toBe(`* Parent [1/2]
+- [ ] Task one
+  SCHEDULED: <2026-10-20 Tue>
+  Some text
+- [X] Task two :home:
+  - Plain sub
+* Next
+`);
+    expect(listToEntries(list, 0).text).toBe(text);
   });
 });
